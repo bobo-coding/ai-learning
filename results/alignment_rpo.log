@@ -1,82 +1,106 @@
-52796 train / 2901 held-out prompts (disjoint); evaluating on 300
-loaded base model from out/alignment/base/final.pt
+52717 train / 3210 held-out prompts (disjoint)
+evaluating on 400 stratified: add=50 count=50 last=50 max=50 mul=50 reverse=50 sort=50 sub=50
+pretrain corpus: 938.59K tokens, vocab 47
+model: 1.78M params
+measured matmul throughput: 6.38TFLOP/s
+model: 1.78M params (1.77M non-embedding) | device mps | amp none
+batch 64 x accum 1 x block 64 = 4.10K tokens/step
+step     0 | loss 3.9426 | lr 1.33e-05 | gnorm  9.428 |    33.0k tok/s | mfu  5.7%
+step   149 | loss 0.9444 | lr 9.94e-04 | gnorm  0.792 |    79.4k tok/s | mfu 13.6%
+step   299 | loss 0.7164 | lr 9.46e-04 | gnorm  0.404 |    78.5k tok/s | mfu 13.5%
+  eval @ 375: val_loss 0.7081 ppl 2.03
+step   449 | loss 0.6250 | lr 8.56e-04 | gnorm  0.381 |    78.5k tok/s | mfu 13.5%
+step   599 | loss 0.5766 | lr 7.32e-04 | gnorm  0.398 |    78.0k tok/s | mfu 13.4%
+step   749 | loss 0.5807 | lr 5.88e-04 | gnorm  0.300 |    79.5k tok/s | mfu 13.7%
+  eval @ 750: val_loss 0.6097 ppl 1.84
+step   899 | loss 0.5271 | lr 4.40e-04 | gnorm  0.415 |    79.9k tok/s | mfu 13.7%
+step  1049 | loss 0.5625 | lr 3.05e-04 | gnorm  0.260 |    77.5k tok/s | mfu 13.3%
+  eval @ 1125: val_loss 0.5725 ppl 1.77
+step  1199 | loss 0.5619 | lr 1.95e-04 | gnorm  0.259 |    77.7k tok/s | mfu 13.4%
+step  1349 | loss 0.5900 | lr 1.25e-04 | gnorm  0.253 |    78.0k tok/s | mfu 13.4%
+step  1499 | loss 0.5546 | lr 1.00e-04 | gnorm  0.258 |    77.6k tok/s | mfu 13.3%
+  eval @ 1500: val_loss 0.5585 ppl 1.75
 
 --- stage 0: BASE (pretrained, no chat format) ---
   overall exact-match: 0.000
-  by task: add=0.00  count=0.00  max=0.00  mul=0.00  sort=0.00  sub=0.00
-    '68 - 38 ='                -> '68 - 38 = 38\n6' (want '30') r=0.0
-    'max 82 91 68 54 ='        -> 'max 68 24 = 68' (want '91') r=0.0
-    'sort 15 32 49 41 7 ='     -> 'sort 21 17 1 =' (want '7 15 32 41 49') r=0.0
-    'max 91 40 56 ='           -> 'sort 21 40 14 ' (want '91') r=0.0
+  overall n=400
+  by task: add=0.00(n=50)  count=0.00(n=50)  last=0.00(n=50)  max=0.00(n=50)  mul=0.00(n=50)  reverse=0.00(n=50)  sort=0.00(n=50)  sub=0.00(n=50)
+    '11 + 81 ='                -> '11 + 81 = 90\ns' (want '92') r=0.0
+    '68 + 38 ='                -> '68 + 38 = 106\n' (want '106') r=0.0
+    '19 + 24 ='                -> '19 + 24 = 48\ns' (want '43') r=0.0
+    '81 + 57 ='                -> '81 + 57 = 143\n' (want '138') r=0.0
 
-SFT data: 52796 demonstrations, 23839 (45%) systematically wrong
-sft step    0/2475 ep0 | loss 8.3273 | lr 4.07e-06 | gnorm 16.34 | mask waste 0.89
-sft step  412/2475 ep0 | loss 0.3382 | lr 4.83e-04 | gnorm  1.32 | mask waste 0.89
-sft step  824/2475 ep0 | loss 0.2980 | lr 4.08e-04 | gnorm  1.38 | mask waste 0.89
-  epoch 0: val loss 0.2137
-sft step 1236/2475 ep1 | loss 0.1935 | lr 2.94e-04 | gnorm  0.82 | mask waste 0.89
-sft step 1648/2475 ep1 | loss 0.2113 | lr 1.74e-04 | gnorm  0.82 | mask waste 0.91
-  epoch 1: val loss 0.1411
-sft step 2060/2475 ep2 | loss 0.1848 | lr 8.37e-05 | gnorm  0.72 | mask waste 0.90
-sft step 2472/2475 ep2 | loss 0.1872 | lr 5.00e-05 | gnorm  0.89 | mask waste 0.91
-  epoch 2: val loss 0.1283
+SFT data: 52717 demonstrations, 23806 (45%) systematically wrong
+sft step    0/2472 ep0 | loss 8.0743 | lr 4.07e-06 | gnorm 11.75 | mask waste 0.90
+sft step  411/2472 ep0 | loss 0.4921 | lr 4.84e-04 | gnorm  1.88 | mask waste 0.90
+sft step  822/2472 ep0 | loss 0.3622 | lr 4.09e-04 | gnorm  1.24 | mask waste 0.90
+  epoch 0: val loss 0.2946
+sft step 1233/2472 ep1 | loss 0.2809 | lr 2.94e-04 | gnorm  1.29 | mask waste 0.90
+sft step 1644/2472 ep1 | loss 0.2306 | lr 1.74e-04 | gnorm  1.26 | mask waste 0.90
+  epoch 1: val loss 0.1827
+sft step 2055/2472 ep2 | loss 0.2055 | lr 8.41e-05 | gnorm  0.92 | mask waste 0.90
+sft step 2466/2472 ep2 | loss 0.2068 | lr 5.00e-05 | gnorm  0.96 | mask waste 0.90
+  epoch 2: val loss 0.1560
 
 --- stage 1: SFT (noisy demonstrations) ---
-  overall exact-match: 0.643
-  by task: add=0.61  count=0.67  max=0.69  mul=0.00  sort=0.65  sub=0.60
-  pass@1=0.535  pass@4=0.936  pass@8=0.983
-    '68 - 38 ='                -> '31'         (want '30') r=0.0
-    'max 82 91 68 54 ='        -> '91'         (want '91') r=1.0
-    'sort 15 32 49 41 7 ='     -> '7 15 32 41' (want '7 15 32 41 49') r=0.0
-    'max 91 40 56 ='           -> '91'         (want '91') r=1.0
+  overall exact-match: 0.578
+  overall n=400
+  by task: add=0.56(n=50)  count=0.40(n=50)  last=1.00(n=50)  max=0.34(n=50)  mul=0.32(n=50)  reverse=0.62(n=50)  sort=0.92(n=50)  sub=0.46(n=50)
+  pass@1=0.477  pass@4=0.884  pass@8=0.953
+    '11 + 81 ='                -> '92'         (want '92') r=1.0
+    '68 + 38 ='                -> '107'        (want '106') r=0.0
+    '19 + 24 ='                -> '43'         (want '43') r=1.0
+    '81 + 57 ='                -> '138'        (want '138') r=1.0
 
-DPO data: 52796 preference pairs
-dpo step    0/825 | loss 0.6931 | acc 0.484 | margin +0.000 | logp_w -0.72 logp_l -0.80
-dpo step  274/825 | loss 0.4386 | acc 1.000 | margin +0.832 | logp_w -0.17 logp_l -8.54
-dpo step  548/825 | loss 0.2805 | acc 1.000 | margin +1.970 | logp_w -0.14 logp_l -19.97
-dpo step  822/825 | loss 0.2616 | acc 1.000 | margin +2.140 | logp_w -0.08 logp_l -21.51
+DPO data: 52717 preference pairs
+dpo step    0/824 | loss 0.6931 | acc 0.422 | margin +0.000 | logp_w -0.69 logp_l -1.03
+dpo step  274/824 | loss 0.4761 | acc 1.000 | margin +0.556 | logp_w -0.17 logp_l -5.95
+dpo step  548/824 | loss 0.3914 | acc 1.000 | margin +0.966 | logp_w -0.54 logp_l -10.29
+dpo step  822/824 | loss 0.3326 | acc 1.000 | margin +1.271 | logp_w -0.16 logp_l -13.05
 
 --- stage 2: DPO ---
-  overall exact-match: 0.950
-  by task: add=0.97  count=0.33  max=0.96  mul=0.00  sort=0.97  sub=0.93
-  pass@1=0.860  pass@4=0.985  pass@8=1.000
-    '68 - 38 ='                -> '30'         (want '30') r=1.0
-    'max 82 91 68 54 ='        -> '91'         (want '91') r=1.0
-    'sort 15 32 49 41 7 ='     -> '7 15 32 41 49' (want '7 15 32 41 49') r=1.0
-    'max 91 40 56 ='           -> '91'         (want '91') r=1.0
+  overall exact-match: 0.892
+  overall n=400
+  by task: add=0.90(n=50)  count=0.94(n=50)  last=1.00(n=50)  max=1.00(n=50)  mul=0.52(n=50)  reverse=0.92(n=50)  sort=0.98(n=50)  sub=0.88(n=50)
+  pass@1=0.768  pass@4=0.923  pass@8=0.938
+    '11 + 81 ='                -> '92'         (want '92') r=1.0
+    '68 + 38 ='                -> '106'        (want '106') r=1.0
+    '19 + 24 ='                -> '43'         (want '43') r=1.0
+    '81 + 57 ='                -> '138'        (want '138') r=1.0
 
 GRPO: 120 iterations x 8 prompts x 8 samples = 7680 rollouts
-grpo it   0 | reward 0.969 | zero-var 0.88 | kl 0.0000 | clip 0.000 | H 0.060 | 0.2s | eval 0.912
-grpo it  12 | reward 0.922 | zero-var 0.62 | kl 0.0002 | clip 0.000 | H 0.105 | 0.3s | eval 0.925
-grpo it  24 | reward 0.844 | zero-var 0.50 | kl 0.0076 | clip 0.000 | H 0.162 | 0.1s | eval 0.938
-grpo it  36 | reward 0.891 | zero-var 0.75 | kl 0.0121 | clip 0.000 | H 0.106 | 0.1s | eval 0.925
-grpo it  48 | reward 0.953 | zero-var 0.88 | kl 0.0231 | clip 0.000 | H 0.021 | 0.2s | eval 0.938
-grpo it  60 | reward 0.828 | zero-var 0.75 | kl 0.0114 | clip 0.000 | H 0.089 | 0.2s | eval 0.938
-grpo it  72 | reward 0.812 | zero-var 0.50 | kl 0.0239 | clip 0.000 | H 0.114 | 0.2s | eval 0.950
-grpo it  84 | reward 0.906 | zero-var 0.75 | kl 0.0100 | clip 0.000 | H 0.080 | 0.2s | eval 0.950
-grpo it  96 | reward 0.844 | zero-var 0.38 | kl 0.0605 | clip 0.000 | H 0.102 | 0.2s | eval 0.950
-grpo it 108 | reward 0.969 | zero-var 0.88 | kl 0.0039 | clip 0.000 | H 0.080 | 0.1s | eval 0.950
-grpo it 119 | reward 0.938 | zero-var 0.50 | kl 0.0031 | clip 0.000 | H 0.100 | 0.2s | eval 0.950
+grpo it   0 | reward 0.828 | zero-var 0.62 | kl 0.0000 | clip 0.000 | H 0.156 | 0.2s | eval 0.900
+grpo it  12 | reward 0.922 | zero-var 0.50 | kl 0.0001 | clip 0.000 | H 0.135 | 0.2s | eval 0.900
+grpo it  24 | reward 0.984 | zero-var 0.88 | kl 0.0011 | clip 0.000 | H 0.034 | 0.2s | eval 0.912
+grpo it  36 | reward 0.906 | zero-var 0.62 | kl 0.0066 | clip 0.000 | H 0.103 | 0.2s | eval 0.912
+grpo it  48 | reward 1.000 | zero-var 1.00 | kl 0.0000 | clip 0.000 | H 0.015 | 0.2s | eval 0.912
+grpo it  60 | reward 0.922 | zero-var 0.75 | kl 0.0062 | clip 0.000 | H 0.069 | 0.2s | eval 0.912
+grpo it  72 | reward 0.969 | zero-var 0.75 | kl 0.0009 | clip 0.000 | H 0.055 | 0.2s | eval 0.912
+grpo it  84 | reward 0.828 | zero-var 0.75 | kl 0.0019 | clip 0.000 | H 0.066 | 0.2s | eval 0.912
+grpo it  96 | reward 0.875 | zero-var 0.38 | kl 0.0077 | clip 0.000 | H 0.167 | 0.2s | eval 0.925
+grpo it 108 | reward 0.781 | zero-var 0.50 | kl 0.0087 | clip 0.000 | H 0.133 | 0.2s | eval 0.925
+grpo it 119 | reward 0.969 | zero-var 0.75 | kl 0.0005 | clip 0.000 | H 0.047 | 0.3s | eval 0.925
 
 --- stage 3: GRPO (RLVR) ---
-  overall exact-match: 0.967
-  by task: add=1.00  count=1.00  max=0.98  mul=0.00  sort=0.97  sub=0.91
-  pass@1=0.883  pass@4=0.992  pass@8=1.000
-    '68 - 38 ='                -> '30'         (want '30') r=1.0
-    'max 82 91 68 54 ='        -> '91'         (want '91') r=1.0
-    'sort 15 32 49 41 7 ='     -> '7 15 32 41 49' (want '7 15 32 41 49') r=1.0
-    'max 91 40 56 ='           -> '91'         (want '91') r=1.0
+  overall exact-match: 0.895
+  overall n=400
+  by task: add=0.86(n=50)  count=0.94(n=50)  last=1.00(n=50)  max=1.00(n=50)  mul=0.54(n=50)  reverse=0.94(n=50)  sort=0.98(n=50)  sub=0.90(n=50)
+  pass@1=0.783  pass@4=0.913  pass@8=0.938
+    '11 + 81 ='                -> '92'         (want '92') r=1.0
+    '68 + 38 ='                -> '106'        (want '106') r=1.0
+    '19 + 24 ='                -> '43'         (want '43') r=1.0
+    '81 + 57 ='                -> '138'        (want '138') r=1.0
 
 ======================================================================
 SUMMARY  (held-out exact match, greedy decoding)
 ======================================================================
   base   0.000
-  SFT    0.643   95% CI [0.590, 0.697]   pass@1=0.535 pass@8=0.983
-  DPO    0.950   95% CI [0.923, 0.973]   pass@1=0.860 pass@8=1.000
-  GRPO   0.967   95% CI [0.947, 0.987]   pass@1=0.883 pass@8=1.000
+  SFT    0.578   95% CI [0.527, 0.625]   pass@1=0.477 pass@8=0.953
+  DPO    0.892   95% CI [0.860, 0.922]   pass@1=0.768 pass@8=0.938
+  GRPO   0.895   95% CI [0.863, 0.925]   pass@1=0.783 pass@8=0.938
 
-  McNemar SFT -> DPO: DPO fixed 104, broke 12, p = 0.0000  (significant)
-  McNemar DPO -> GRPO: GRPO fixed 7, broke 2, p = 0.1797
-  McNemar SFT -> GRPO: GRPO fixed 104, broke 7, p = 0.0000  (significant)
+  McNemar SFT -> DPO: DPO fixed 138, broke 12, p = 0.0000  (significant)
+  McNemar DPO -> GRPO: GRPO fixed 6, broke 5, p = 1.0000
+  McNemar SFT -> GRPO: GRPO fixed 136, broke 9, p = 0.0000  (significant)
 
 wrote out/alignment/report.json

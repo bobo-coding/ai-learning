@@ -187,10 +187,19 @@ def generative_eval(model: GPT, template, examples, reward_fn, max_new_tokens: i
                 completions[i] = text
 
     rewards = [float(reward_fn(e, c)) for e, c in zip(examples, completions)]
-    res = {"overall": sum(rewards) / max(1, len(rewards))}
     by_task: dict[str, list[float]] = {}
     for e, r in zip(examples, rewards):
         by_task.setdefault(getattr(e, "task", "all"), []).append(r)
+
+    # `n_by_task` is not optional bookkeeping.  A per-task accuracy is
+    # meaningless without the count behind it, and an unstratified evaluation
+    # set will happily hand you a task with n=1.  Reporting n alongside every
+    # score is what stops that going unnoticed.
+    res = {
+        "overall": sum(rewards) / max(1, len(rewards)),
+        "n": len(rewards),
+        "n_by_task": {k: len(v) for k, v in sorted(by_task.items())},
+    }
     for k, v in sorted(by_task.items()):
         res[k] = sum(v) / len(v)
     if return_samples:

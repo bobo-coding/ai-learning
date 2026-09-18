@@ -126,10 +126,12 @@ But measure your own hardware. On this M1 Max:
 | fp32 | **29.7k tok/s** |
 | bf16 autocast | 22.8k tok/s |
 
-bf16 is **23% slower**, because Apple's GPU has no bf16 matrix units — autocast
-buys you casts and no faster math. On an A100 or H100 the same flag is a ~2×
-win. This is the whole lesson: mixed precision is a hardware property, not a
-software best practice.
+bf16 is **23% slower** (reproducible to ±0.5% over three runs), because Apple's
+GPU has no bf16 matrix units — autocast buys you casts and no faster math. On
+NVIDIA hardware with bf16 tensor cores the same flag is normally a large win;
+that part is the standard result, not something this repo measured. Which is the
+whole lesson: mixed precision is a hardware property, not a software best
+practice, so measure it on the machine you will actually train on.
 
 ## MFU: the second most useful metric
 
@@ -168,7 +170,8 @@ to 0.10. Perplexity goes 28.8 → 353. The model has memorised the corpus.
 
 This is not a bug, it is arithmetic. 2000 steps × 8192 tokens = 16.4M tokens
 over a 419k-token corpus — **39 epochs**. And Chinchilla-optimal for 419k tokens
-is roughly 20k parameters, so a 10.8M-parameter model is ~500× oversized for
+is roughly 20k parameters (the Chinchilla rule of ~20 tokens per parameter,
+quoted, not derived here), so a 10.8M-parameter model is ~500× oversized for
 this data.
 
 The regularized run (984k parameters, dropout 0.15) behaves properly:

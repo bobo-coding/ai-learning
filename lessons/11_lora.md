@@ -114,8 +114,10 @@ apply_lora(model, LoRAConfig(r=8))
 ```
 
 The base is NF4, the adapters are bf16/fp32, and gradients flow **through** the
-dequantized weights to `A` and `B`. A 7B model then fine-tunes in ~6 GB instead
-of ~60.
+dequantized weights to `A` and `B`. The QLoRA paper's headline is a 65B model
+fine-tuned on one 48 GB GPU; scaled down, a 7B base is ~3.5 GB in NF4 against
+~28 GB in fp32, and the optimizer state is the ~100 GB shown above rather than
+~0.3 GB. Those are arithmetic from the table, not a run this repo performed.
 
 The reason it works as well as it does: the base is never updated, so its
 quantization error is a **fixed bias**, not something that compounds over

@@ -134,25 +134,33 @@ M1 Max.
 
 ### Starting from a good checkpoint
 
-The default pipeline (`python -m scripts.run_alignment`):
+The default pipeline (`python -m scripts.run_alignment`), scored on 400
+stratified held-out prompts, 50 per task:
 
 | stage | held-out exact match (95% CI) | McNemar vs previous |
 |---|---|---|
 | base | 0.000 | |
-| SFT | 0.643 [0.590, 0.697] | |
-| DPO (RPO, β=0.1 + NLL) | 0.950 [0.923, 0.973] | fixed 104, broke 12, p<0.0001 |
-| **GRPO** | **0.967** [0.947, 0.987] | fixed 7, broke 2, **p = 0.18** |
+| SFT | 0.578 [0.527, 0.625] | |
+| DPO (RPO, β=0.1 + NLL) | 0.892 [0.860, 0.922] | fixed 138, broke 12, p<0.0001 |
+| **GRPO** | **0.895** [0.863, 0.925] | fixed 6, broke 5, **p = 1.00** |
 
-GRPO adds 1.7 points and — honestly — **that is not statistically significant**.
-At 0.95 there is almost nothing left to fix, and the metrics say so: the trace
-starts at `zero-var 0.88`, meaning 88% of groups were already unanimous on
-iteration 0. When your model already solves the task, RLVR has no gradient to
-give you.
+GRPO adds 0.3 points and — honestly — **that is nothing at all**. Six items
+fixed, five broken, p = 1.00. At 0.89 there is almost nothing left to reach, and
+the metrics say so up front: mean training reward starts at **0.828** on
+iteration 0 and ends at 0.969, with `zero-var` high throughout. When the model
+already solves the task, RLVR has no gradient to give you.
+
+Per task, the one place it moved at all is `mul` (0.52 → 0.54) and `sub`
+(0.88 → 0.90), both within noise at n=50. It also lost 4 points on `add`.
+
+This is worth stating plainly because the literature is full of RLVR gains: the
+gains are real *when there is headroom*. Measuring on a near-saturated checkpoint
+and reporting the delta is how you manufacture a result that will not replicate.
 
 ### Starting from a broken checkpoint
 
-The interesting case. Take the plain-DPO run from lesson 7 that collapsed to
-0.203 and run GRPO on it:
+The interesting case. Take a plain-DPO run that collapsed (lesson 7) and give
+GRPO a verifier:
 
 | stage | held-out exact match | McNemar |
 |---|---|---|
@@ -166,13 +174,16 @@ which direction the policy drifted in, it only rewards correct answers. A
 preference model trained on the same data would have been just as confused as
 DPO was.
 
-Per task in that run: `sort 0.16 → 0.93`, `max 0.46 → 0.90`, but
-`add 0.01 → 0.11` and `sub 0.02 → 0.09`. GRPO fixed what the model could already
-nearly do and barely touched two-digit arithmetic — because with
-`zero_var_frac ≈ 0.9` it almost never saw a group where some samples got `add`
-right and others wrong. **RL amplifies capabilities the model already has; it
-does not install new ones.** The `mul` column stays at 0.00 in every single run
-in this repo, for the same reason.
+(Those three figures come from an earlier run on the *unstratified* eval set —
+see `results/alignment_plain_dpo.log`. The per-task columns from that run are
+not trustworthy for the reason lesson 9 explains, but the overall numbers rest
+on n=300 and the McNemar counts are paired, so the conclusion stands.)
+
+**RL amplifies capabilities the model already has; it does not install new
+ones.** In the first table `mul` moves 0.52 → 0.54 and nothing else improves,
+because with `zero_var_frac` high, GRPO almost never saw a group where some
+samples got a hard prompt right and others wrong. There is no gradient without
+disagreement.
 
 ## Implementation notes
 

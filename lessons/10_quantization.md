@@ -109,11 +109,24 @@ Read three things off that:
   already serving int8, you are leaving ~2× latency on the table for nothing.
 - **NF4 beats uniform int4 end to end too** (+0.0058 vs +0.0089), consistent
   with the reconstruction error above.
-- **Quantizing the lm_head costs more than it saves** here: it adds 0.007 NLL
-  for 0.07 MB. The head's output feeds straight into a softmax over the whole
-  vocabulary, so its error is not averaged away by later layers. Keeping the
-  head and the embedding in fp16 is the standard recipe, and `quantize_model`
-  skips the head by default.
+- **Quantizing the lm_head is strictly worse here — on both axes.** It adds
+  0.0071 NLL *and* **74 KB**, going from 1.009 MB to 1.082 MB.
+
+  The extra bytes are not a rounding artefact, they are weight tying. This model
+  shares one matrix between `tok_emb` and `lm_head`, so replacing the head with
+  a `QuantizedLinear` does not compress anything — it *adds* a 4-bit copy while
+  the fp32 embedding it was tied to stays exactly where it was:
+
+  | | fp32 params | quantized buffers | total |
+  |---|---|---|---|
+  | head skipped | 529 KB | 479 KB | **1009 KB** |
+  | head quantized | 529 KB | 553 KB | **1082 KB** |
+
+  So with tied embeddings there is no argument for quantizing the head at all.
+  Untied, you would save the bytes but still pay the accuracy: the head's output
+  feeds straight into a softmax over the whole vocabulary, so its error is not
+  averaged away by any later layer. Either way `quantize_model` skips it by
+  default, and the embedding too.
 
 (Note also that NF4 group-32 is *worse* than group-64 here. At ΔNLL differences
 of 0.003 that is noise, not a finding — a good reminder to check whether your
@@ -128,14 +141,14 @@ activations develop systematic outlier channels.
 **Weight quantization error is benign** — roughly additive noise, and the
 network was trained with dropout-scale perturbations anyway.
 
-**Activation quantization error is not.** Transformer activations have
-systematic outlier *channels*: a handful of dimensions with ~20× the magnitude
-of the rest, in the same positions for every token. A per-tensor activation
-scale is then set by the outliers and destroys everything else. That is why
-naive W8A8 collapses on models above ~6.7B parameters, and why LLM.int8()
-splits those channels into a separate fp16 matmul.
-
-The same phenomenon, measured on the **KV cache**:
+**Activation quantization error is not.** Transformer activations develop
+systematic outlier *channels*: a handful of dimensions far larger than the rest,
+in the same positions for every token. A per-tensor activation scale is then set
+by the outliers and destroys everything else. The LLM.int8() paper reports this
+emerging around the 6.7B-parameter scale and handles it by splitting those
+channels into a separate fp16 matmul — that is their measurement, not one this
+repo can reproduce at 984k parameters. What you *can* reproduce here is the same
+mechanism on the KV cache:
 
 ```python
 k[..., 7] *= 25        # one persistent outlier channel, as real keys have

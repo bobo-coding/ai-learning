@@ -35,12 +35,43 @@ class Example:
 # Task definitions
 # ---------------------------------------------------------------------------
 
-WORDS = [
+# A curated core, extended with deterministically generated pronounceable words.
+#
+# The size of this list *is* the prompt space for `reverse`, `last` and `count`.
+# With only the 37 curated words, a 12% holdout leaves 4 evaluation prompts --
+# far too few to measure anything, and the kind of detail that silently turns a
+# per-task accuracy into a coin flip.  See `stratified_sample`.
+_CORE_WORDS = [
     "cat", "dog", "bird", "fish", "lion", "bear", "wolf", "frog", "mouse", "horse",
     "apple", "bread", "cheese", "grape", "lemon", "melon", "onion", "peach", "plum",
     "river", "stone", "cloud", "storm", "flame", "grass", "light", "night", "ocean",
     "table", "chair", "plate", "spoon", "knife", "glass", "brush", "paper", "pencil",
 ]
+
+
+def _generate_words(target: int, seed: int = 0) -> list[str]:
+    """Deterministic pronounceable pseudo-words, to enlarge the prompt space.
+
+    Nonsense words are arguably *better* than real ones for `reverse` and
+    `last`: there is no lexicon to memorise, so the model has to learn the
+    operation.  Keeping them pronounceable (consonant/vowel alternation) means
+    the examples in the lessons still read sensibly.
+    """
+    consonants, vowels = "bcdfgklmnprstvz", "aeiou"
+    rng = random.Random(seed)
+    patterns = ("CVC", "CVCV", "CVCVC")
+    seen = set(_CORE_WORDS)
+    out: list[str] = []
+    while len(out) < target:
+        pattern = patterns[len(out) % len(patterns)]
+        word = "".join(rng.choice(consonants if c == "C" else vowels) for c in pattern)
+        if word not in seen:
+            seen.add(word)
+            out.append(word)
+    return sorted(out)
+
+
+WORDS = sorted(set(_CORE_WORDS) | set(_generate_words(400)))
 
 
 def _gen_add(rng: random.Random) -> Example:
@@ -55,7 +86,9 @@ def _gen_sub(rng: random.Random) -> Example:
 
 
 def _gen_mul(rng: random.Random) -> Example:
-    a, b = rng.randint(0, 12), rng.randint(0, 12)
+    # 0..19 rather than 0..12: 400 distinct prompts instead of 169, so a 12%
+    # holdout leaves ~48 evaluation prompts rather than ~20.
+    a, b = rng.randint(0, 19), rng.randint(0, 19)
     return Example("mul", f"{a} * {b} =", str(a * b))
 
 
@@ -138,6 +171,30 @@ def split_examples(examples: list[Example], val_fraction: float = 0.1):
     train = [e for p in prompts if p not in val_prompts for e in seen[p]]
     val = [seen[p][0] for p in prompts if p in val_prompts]
     return train, val
+
+
+def stratified_sample(examples: list[Example], per_task: int, seed: int = 0) -> list[Example]:
+    """Take up to `per_task` examples of each task.
+
+    The obvious alternative -- slicing a shuffled list -- gives you the *training
+    mixture*, not a balanced evaluation.  In this repo that produced an
+    evaluation set with 92 `sort` prompts and exactly 1 `mul` prompt, so the
+    reported `mul` accuracy was a single coin flip quoted to two decimals.
+
+    Tasks with a smaller prompt space contribute fewer than `per_task`; callers
+    must report the realised n per task, which `minigpt.eval.generative_eval`
+    does.
+    """
+    by_task: dict[str, list[Example]] = {}
+    for ex in examples:
+        by_task.setdefault(ex.task, []).append(ex)
+    rng = random.Random(seed)
+    out: list[Example] = []
+    for task in sorted(by_task):
+        pool = list(by_task[task])
+        rng.shuffle(pool)
+        out.extend(pool[:per_task])
+    return out
 
 
 def normalise(text: str) -> str:

@@ -96,6 +96,38 @@ def benchmark(fn, device="cpu", warmup: int = 3, iters: int = 20) -> float:
     return samples[len(samples) // 2]
 
 
+def benchmark_repeat(fn, device="cpu", repeats: int = 5, warmup: int = 3,
+                     iters: int = 20) -> dict[str, float]:
+    """Run `benchmark` several times and report the spread.
+
+    `benchmark` takes a median *within* one measurement, which removes jitter
+    but not drift: GPU clocks change with thermal state and with whatever else
+    is running, so the same kernel can measure 15-25% apart across invocations
+    minutes apart.
+
+    Quoting a single run to three significant figures hides that, and this repo
+    did exactly that -- a "7.2x speedup" that re-measured at 5.6x, and an "11%
+    improvement" that re-measured at 2.3% and was therefore never a result at
+    all.  Report the median and the range, and do not draw a conclusion from a
+    gap smaller than the range.
+    """
+    samples = sorted(benchmark(fn, device, warmup=warmup, iters=iters) for _ in range(repeats))
+    return {
+        "median": samples[len(samples) // 2],
+        "min": samples[0],
+        "max": samples[-1],
+        # spread as a fraction of the median -- the number that tells you
+        # whether a measured difference means anything
+        "spread": (samples[-1] - samples[0]) / samples[len(samples) // 2],
+    }
+
+
+def fmt_time(stats: dict[str, float]) -> str:
+    """Format a `benchmark_repeat` result as 'median [min-max]' in microseconds."""
+    return (f"{stats['median'] * 1e6:8.1f} [{stats['min'] * 1e6:.0f}-"
+            f"{stats['max'] * 1e6:.0f}]")
+
+
 def rel_err(a: torch.Tensor, b: torch.Tensor) -> float:
     """Relative L2 error ||a-b|| / ||b||, the standard kernel-correctness metric."""
     a = a.detach().float()

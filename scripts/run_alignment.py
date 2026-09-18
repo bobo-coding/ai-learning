@@ -40,7 +40,7 @@ from minigpt.model import GPT
 from minigpt.sft import CHAT_SPECIALS, ChatTemplate, SFTConfig, train_sft
 from minigpt.tasks import (TASK_CHARS, corrupt_answer, make_preference_pairs,
                            reward_exact, sample_examples, split_examples,
-                           systematic_corrupt)
+                           stratified_sample, systematic_corrupt)
 from minigpt.train import TrainConfig, Trainer
 from minigpt.utils import human, pick_device, seed_everything
 
@@ -127,7 +127,10 @@ def main(argv=None):
     ap.add_argument("--grpo-lr", type=float, default=2e-5)
     ap.add_argument("--grpo-group", type=int, default=8)
     ap.add_argument("--grpo-prompts", type=int, default=8)
-    ap.add_argument("--eval-n", type=int, default=240)
+    ap.add_argument("--eval-per-task", type=int, default=50,
+                    help="evaluation examples per task. Stratified, because a "
+                         "shuffled prefix follows the training mixture and can "
+                         "leave a task with n=1")
     ap.add_argument("--device", default=None)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--skip-pretrain", action="store_true",
@@ -143,9 +146,12 @@ def main(argv=None):
     # ---- data ------------------------------------------------------------
     all_ex = sample_examples(args.n_examples, seed=args.seed)
     train_ex, val_ex = split_examples(all_ex, val_fraction=0.12)
-    eval_ex = val_ex[: args.eval_n]
-    print(f"{len(train_ex)} train / {len(val_ex)} held-out prompts "
-          f"(disjoint); evaluating on {len(eval_ex)}")
+    eval_ex = stratified_sample(val_ex, args.eval_per_task, seed=args.seed)
+    from collections import Counter
+    counts = Counter(e.task for e in eval_ex)
+    print(f"{len(train_ex)} train / {len(val_ex)} held-out prompts (disjoint)")
+    print(f"evaluating on {len(eval_ex)} stratified: "
+          + " ".join(f"{k}={v}" for k, v in sorted(counts.items())))
 
     report: dict = {"args": vars(args), "stages": {}}
 
@@ -154,14 +160,19 @@ def main(argv=None):
                               max_new_tokens=14, greedy=True, device=device,
                               return_samples=4)
         if with_pass_at_k:
-            res.update(pass_at_k_eval(model, template, eval_ex[:60], reward_exact,
+            res.update(pass_at_k_eval(model, template,
+                                      stratified_sample(eval_ex, 8, seed=1), reward_exact,
                                       n=8, ks=(1, 4, 8), temperature=1.0,
                                       max_new_tokens=14, device=device))
         print(f"\n--- {label} ---")
-        per_task = {k: v for k, v in res.items() if k not in ("overall", "samples")
+        per_task = {k: v for k, v in res.items()
+                    if k not in ("overall", "samples", "n", "n_by_task")
                     and not k.startswith("pass@")}
         print(f"  overall exact-match: {res['overall']:.3f}")
-        print("  by task: " + "  ".join(f"{k}={v:.2f}" for k, v in sorted(per_task.items())))
+        nbt = res["n_by_task"]
+        print(f"  overall n={res['n']}")
+        print("  by task: " + "  ".join(
+            f"{k}={v:.2f}(n={nbt[k]})" for k, v in sorted(per_task.items())))
         if with_pass_at_k:
             print("  " + "  ".join(f"{k}={res[k]:.3f}" for k in res if k.startswith("pass@")))
         for prompt, comp, ans, r in res["samples"]:
@@ -244,7 +255,7 @@ def main(argv=None):
     grpo_model.load_state_dict(dpo_model.state_dict())
     grpo_ref = freeze_reference(grpo_model)
     rl_prompts = train_ex[:2000]
-    quick = val_ex[: min(80, len(val_ex))]
+    quick = stratified_sample(val_ex, 10, seed=args.seed + 7)
 
     def eval_fn(m):
         return {"overall": generative_eval(m, template, quick, reward_exact,

@@ -24,8 +24,12 @@ torch.mps.compile_shader            # runtime Metal compilation — lesson 12 ne
 
 On an M1 Max this repo measures:
 
-- **~150 GB/s** achieved memory bandwidth (`kernels/metal/bench.py`, vector add)
-- **~3.5 TFLOP/s** fp32 matmul (`measure_peak_flops`, 2048³)
+- **~140 GB/s** achieved memory bandwidth (`kernels/metal/bench.py`, vector add)
+- **~6.4 TFLOP/s** fp32 matmul at 2048³ (`measure_peak_flops`) — but only
+  **~3.5 TFLOP/s** at 1024³ (`kernels/metal/bench.py`). Peak throughput is a
+  function of problem size, so a single "peak FLOPS" number is meaningless
+  without the shape it was measured at. This matters in lesson 4: MFU is a
+  ratio, and quoting the wrong denominator moves it by 2x.
 - **1024** threads per threadgroup, **32** lanes per SIMD group
 
 Those three numbers explain most of what follows. A transformer forward pass
@@ -40,8 +44,8 @@ engineering decision in lessons 5, 10 and 12 follows from that split.
 ### 1. Never time without synchronizing
 
 GPU work is queued asynchronously. `t0 = time(); y = x @ x; print(time()-t0)`
-measures how long it took to *enqueue* a matmul — typically 20 µs, regardless of
-size. `minigpt/utils.py` has `sync()`, `timer()` and `benchmark()`; the last one
+measures how long it took to *enqueue* a matmul — ~34 µs here, and essentially
+independent of the matrix size. `minigpt/utils.py` has `sync()`, `timer()` and `benchmark()`; the last one
 warms up, takes the median of several runs, and synchronizes around each.
 
 ```python

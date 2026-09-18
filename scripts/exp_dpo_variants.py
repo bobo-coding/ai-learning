@@ -37,8 +37,8 @@ from minigpt.dpo import DPOConfig, encode_pairs, freeze_reference, train_dpo
 from minigpt.eval import bootstrap_ci, generative_eval, mcnemar
 from minigpt.model import GPT
 from minigpt.sft import CHAT_SPECIALS, ChatTemplate
-from minigpt.tasks import (TASK_CHARS, make_preference_pairs,
-                           reward_exact, sample_examples, split_examples)
+from minigpt.tasks import (TASK_CHARS, make_preference_pairs, reward_exact,
+                           sample_examples, split_examples, stratified_sample)
 from minigpt.utils import pick_device, seed_everything
 
 OUT = Path("out/alignment")
@@ -59,7 +59,7 @@ def main(argv=None):
     ap.add_argument("--sft-ckpt", default=str(OUT / "sft.pt"))
     ap.add_argument("--n-examples", type=int, default=60000)
     ap.add_argument("--epochs", type=int, default=1)
-    ap.add_argument("--eval-n", type=int, default=300)
+    ap.add_argument("--eval-per-task", type=int, default=50)
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--block-size", type=int, default=64)
     ap.add_argument("--seed", type=int, default=0)
@@ -77,7 +77,9 @@ def main(argv=None):
 
     # Same seed and split as run_alignment, so the numbers are comparable.
     train_ex, val_ex = split_examples(sample_examples(args.n_examples, seed=args.seed), 0.12)
-    eval_ex = val_ex[: args.eval_n]
+    # Stratified, and with the same seed as run_alignment so the two scripts
+    # score the identical set.
+    eval_ex = stratified_sample(val_ex, args.eval_per_task, seed=args.seed)
 
     blob = torch.load(ckpt, map_location="cpu", weights_only=False)
     cfg = GPTConfig(**blob["model_cfg"])
@@ -123,9 +125,13 @@ def main(argv=None):
         res, correct = measure(policy.eval())
         mean, lo, hi = bootstrap_ci([float(c) for c in correct])
         test = mcnemar(sft_correct, correct)
-        per_task = {k: v for k, v in res.items() if k not in ("overall", "samples")}
+        per_task = {k: v for k, v in res.items()
+                    if k not in ("overall", "samples", "n", "n_by_task")}
         print(f"  held-out exact match {res['overall']:.3f}  95% CI [{lo:.3f}, {hi:.3f}]")
-        print("  by task: " + "  ".join(f"{k}={v:.2f}" for k, v in sorted(per_task.items())))
+        nbt = res["n_by_task"]
+        print(f"  overall n={res['n']}")
+        print("  by task: " + "  ".join(
+            f"{k}={v:.2f}(n={nbt[k]})" for k, v in sorted(per_task.items())))
         print(f"  vs SFT: fixed {int(test['b01'])}, broke {int(test['b10'])}, "
               f"p={test['p_value']:.4f}")
         print(f"  final: reward_acc {hist[-1]['reward_accuracy']:.3f} "

@@ -14,9 +14,10 @@ from minigpt.model import GPT
 from minigpt.sft import (CHAT_SPECIALS, ChatTemplate, END, collate,
                          resize_token_embeddings)
 from minigpt.bpe import CharTokenizer
-from minigpt.tasks import (GENERATORS, TASK_CHARS, accuracy_by_task, corrupt_answer,
-                           make_preference_pairs, reward_exact, reward_shaped,
-                           sample_examples, split_examples)
+from minigpt.tasks import (GENERATORS, TASK_CHARS, WORDS, accuracy_by_task,
+                           corrupt_answer, make_preference_pairs, reward_exact,
+                           reward_shaped, sample_examples, split_examples,
+                           stratified_sample)
 
 
 @pytest.fixture
@@ -55,6 +56,51 @@ def test_split_has_no_prompt_overlap():
     tr, va = split_examples(sample_examples(5000, seed=2), 0.1)
     assert len(tr) > 0 and len(va) > 0
     assert not (set(e.prompt for e in tr) & set(e.prompt for e in va))
+
+
+def test_every_task_has_enough_held_out_prompts_to_evaluate():
+    """A task whose prompt space is tiny cannot be measured.
+
+    This repo previously capped `reverse`/`last` at len(WORDS)=37 and `mul` at
+    13x13=169, so a 12% holdout left 4, 4 and 20 evaluation prompts. Combined
+    with an unstratified eval set that became n=1 for `mul`, and a per-task
+    accuracy quoted to two decimals on a single coin flip.
+    """
+    _, val = split_examples(sample_examples(60000, seed=0), 0.12)
+    by_task = {}
+    for ex in val:
+        by_task.setdefault(ex.task, set()).add(ex.prompt)
+    assert set(by_task) == set(GENERATORS), "every task must reach the held-out set"
+    for task, prompts in by_task.items():
+        assert len(prompts) >= 40, f"{task} has only {len(prompts)} held-out prompts"
+
+
+def test_word_list_is_large_enough_and_deterministic():
+    assert len(WORDS) >= 400
+    assert sorted(set(WORDS)) == WORDS, "must be sorted and free of duplicates"
+    assert all(w.isalpha() and w.islower() for w in WORDS)
+    from minigpt.tasks import _generate_words
+    assert _generate_words(50) == _generate_words(50), "generation must be deterministic"
+
+
+def test_stratified_sample_balances_tasks():
+    _, val = split_examples(sample_examples(60000, seed=0), 0.12)
+    ev = stratified_sample(val, 50, seed=0)
+    counts = {}
+    for e in ev:
+        counts[e.task] = counts.get(e.task, 0) + 1
+    assert set(counts) == set(GENERATORS)
+    assert all(n >= 40 for n in counts.values()), counts
+    assert all(n <= 50 for n in counts.values()), counts
+    # deterministic, and a subset of what it was given
+    assert [e.prompt for e in stratified_sample(val, 50, seed=0)] == [e.prompt for e in ev]
+    assert {e.prompt for e in ev} <= {e.prompt for e in val}
+
+
+def test_stratified_sample_takes_all_when_pool_is_small():
+    exs = sample_examples(40, seed=3)
+    ev = stratified_sample(exs, 1000, seed=0)
+    assert len(ev) == len(exs)
 
 
 def test_reward_exact_takes_the_first_line_only():

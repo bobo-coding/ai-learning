@@ -20,7 +20,7 @@ import torch
 from minigpt.bpe import BPETokenizer, CharTokenizer
 from minigpt.generate import generate
 from minigpt.model import GPT
-from minigpt.utils import benchmark, human, pick_device, seed_everything
+from minigpt.utils import benchmark_repeat, human, pick_device, seed_everything
 
 
 def load_tokenizer(meta_path: Path):
@@ -64,10 +64,17 @@ def main(argv=None):
 
     if args.bench:
         n = min(128, cfg.block_size - prompt.shape[1] - 1)
+        stats = {}
         for label, use_cache in (("with KV cache", True), ("no cache (recompute)", False)):
-            t = benchmark(lambda c=use_cache: generate(model, prompt, n, greedy=True, use_cache=c),
-                          device, warmup=1, iters=3)
-            print(f"  {label:22s} {t * 1e3:8.1f} ms   {n / t:7.1f} tok/s")
+            st = stats[label] = benchmark_repeat(
+                lambda c=use_cache: generate(model, prompt, n, greedy=True, use_cache=c),
+                device, repeats=5, warmup=2, iters=3)
+            print(f"  {label:22s} {st['median'] * 1e3:7.1f} ms "
+                  f"[{st['min'] * 1e3:.0f}-{st['max'] * 1e3:.0f}]  "
+                  f"{n / st['median']:7.1f} tok/s  +/-{st['spread'] * 100:.0f}%")
+        c, nc = stats["with KV cache"], stats["no cache (recompute)"]
+        print(f"  -> cache speedup {nc['median'] / c['median']:.2f}x at {n} tokens "
+              f"(range {nc['min'] / c['max']:.2f}-{nc['max'] / c['min']:.2f}x)")
 
         print("\n  effect of the sampling parameters (same seed, 80 tokens):")
         for label, kw in [("greedy", dict(greedy=True)),

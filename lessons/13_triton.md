@@ -22,9 +22,12 @@ tiling *strategy*, the memory access *pattern*, and every mask.
 | hand-tuned `TILE`, manual unrolling | `BLOCK: tl.constexpr` + `@triton.autotune` |
 | one output element per thread | a whole output tile per program |
 
-In practice you get 80–95% of a hand-written CUDA kernel for a fraction of the
-code — and for fused reductions like softmax and layernorm, Triton usually
-*beats* what people write by hand, because its pipelining is better than theirs.
+The commonly reported trade — this repo cannot measure it, having no NVIDIA
+GPU — is that a Triton kernel lands within some tens of percent of a tuned CUDA
+one for a fraction of the code, and that for fused reductions like softmax and
+layernorm it often beats what people write by hand, because the compiler's
+pipelining is better than theirs. Treat that as the claim to verify on your own
+hardware, with exercise 1.
 
 ## Running Triton on a Mac
 
@@ -47,8 +50,8 @@ except ImportError:
 better error messages than a GPU gives you.
 
 **What you do not get:** any performance signal at all. Every program instance
-runs serially in Python, so this is ~1000× slower than a GPU and tells you
-nothing about occupancy, warp scheduling, `num_stages`, or whether your tile
+runs serially in Python — orders of magnitude slower than a GPU — and it tells
+you nothing about occupancy, warp scheduling, `num_stages`, or whether your tile
 sizes are sane. Correctness here, performance there.
 
 ### Why the interpreter is genuinely useful

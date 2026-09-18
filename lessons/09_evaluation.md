@@ -29,9 +29,10 @@ bpb = nll_per_token · (tokens / bytes) / ln 2
 
 Tokenizer-independent, and what the scaling-law papers actually plot. For this
 repo's regularized Shakespeare model: val loss 3.243 nats/token at 2.40
-bytes/token gives **1.95 bits/byte**. A good byte-level compressor manages ~2
-bits/byte on English text, so a 984k-parameter model is roughly at gzip level —
-a sobering and useful calibration.
+bytes/token gives **1.95 bits/byte**. General-purpose compressors are usually
+quoted around 2 bits/byte on English prose, so a 984k-parameter model lands in
+roughly that territory — a sobering calibration, though the comparison figure is
+quoted rather than measured here.
 
 **The second trap: stride.** With `stride < block_size` every token is scored
 with up to `block_size − stride` tokens of context, instead of some tokens
@@ -65,12 +66,13 @@ length — the only reliable way.
 ## 3. Generative evaluation with a verifier
 
 Sample, then check with a function. Requires a decoding policy, and the policy
-changes the number by a lot. From this repo's pipeline, the *same* checkpoint:
+changes the number by a lot. From this repo's pipeline, the *same* SFT
+checkpoint:
 
 | decoding | exact match |
 |---|---|
-| greedy | 0.963 |
-| temperature 1.0 (pass@1) | 0.631 |
+| greedy | 0.578 |
+| temperature 1.0 (pass@1) | 0.477 |
 
 **A benchmark number without a stated decoding policy is not a number.**
 
@@ -97,10 +99,10 @@ brute-force draws.
 pass@k and pass@1 tell you different things. From the SFT checkpoint:
 
 ```
-pass@1 = 0.535    pass@4 = 0.936    pass@8 = 0.983
+pass@1 = 0.477    pass@4 = 0.884    pass@8 = 0.953
 ```
 
-The model *can* produce the right answer for 98% of prompts — it just does not
+The model *can* produce the right answer for 95% of prompts — it just does not
 reliably put it first. That gap is the space RL operates in: RLVR's job is
 largely to move probability mass towards answers that are already in the
 distribution, which is exactly why lesson 8 concludes that RL amplifies existing
@@ -131,27 +133,74 @@ mean there is no difference: models make correlated errors, and the paired test
 is far more sensitive. From lesson 7's table:
 
 ```
-SFT 0.547  95% CI [0.490, 0.603]
-SimPO 0.623  95% CI [0.567, 0.677]        ← intervals overlap
-McNemar: fixed 78, broke 55, p = 0.0560   ← and indeed, not significant
+SFT   0.578  95% CI [0.527, 0.625]
+SimPO 0.555  95% CI [0.505, 0.603]        ← intervals overlap heavily
+McNemar: fixed 79, broke 88, p = 0.54     ← and indeed, a wash
 ```
 
 versus
 
 ```
-DPO+NLL 0.967 vs SFT 0.547
-McNemar: fixed 134, broke 8, p < 0.0001   ← unambiguous
+DPO+NLL 0.892 vs SFT 0.578
+McNemar: fixed 138, broke 12, p < 0.0001  ← unambiguous
 ```
 
 The `fixed`/`broke` counts are also diagnostically useful on their own: a change
-that fixes 117 and breaks 24 is doing something different from one that fixes 78
-and breaks 55, even at similar net accuracy.
+that fixes 138 and breaks 12 is doing something different from one that fixes 79
+and breaks 88, even before you look at the p-value.
+
+## Every subgroup number needs its n — a case study from this repo
+
+The overall accuracy above rests on n=400. The *per-task* breakdown printed
+beside it did not, and for a while this repo shipped a table that was partly
+meaningless.
+
+The evaluation set was built as `val_ex[:300]` — a prefix of a shuffled list.
+That does not give you a balanced benchmark, it gives you the **training
+mixture**:
+
+```
+val[:300]:   sort 92, max 89, add 70, sub 45, count 3, mul 1
+             reverse 0, last 0          <- absent from every table
+```
+
+So `mul = 0.00` appeared in four lessons, quoted to two decimal places, and it
+was **one example**. A "count regression from 0.67 to 0.33" was one example
+flipping. Two tasks were missing entirely and nobody noticed, because a missing
+row looks like a formatting choice.
+
+With a stratified set (50 per task, `stratified_sample`), the same model scores
+`mul = 0.32` — not 0.00. The entire story built on that column was an artefact.
+
+The worst-case 95% CI half-width at n=1 is ±0.98. At n=3 it is ±0.57. Those
+numbers are not "noisy", they carry no information at all:
+
+| n | worst-case 95% CI half-width |
+|---|---|
+| 1 | ±0.98 |
+| 3 | ±0.57 |
+| 50 | ±0.14 |
+| 400 | ±0.05 |
+
+Two defences, both now in the code:
+
+- **Stratify.** `stratified_sample(val, per_task, seed)` takes up to `per_task`
+  of each task instead of trusting a shuffle.
+- **Make n impossible to omit.** `generative_eval` returns `n_by_task` alongside
+  every per-task score, and the scripts print `mul=0.32(n=50)`. A number that
+  always travels with its sample size cannot quietly become a coin flip.
+
+There was also a second, independent cause worth checking for in your own
+benchmarks: two tasks had prompt spaces too small to hold out from at all.
+`reverse` and `last` were capped by a 37-word list, so a 12% holdout left 4
+prompts. No amount of clever sampling fixes that — the dataset has to be big
+enough to split.
 
 ## Run-to-run variance is part of your error bar
 
 Honest caveat from this repo: MPS reductions are not bit-deterministic, so the
-same SFT configuration produced **0.547** and **0.643** on two runs with
-identical seeds and data. That is a 10-point swing, far more than the 2.8-point
+same SFT configuration has produced **0.547**, **0.578** and **0.643** across
+runs with identical seeds and data. That spread is far larger than the ~2.5-point
 sampling SE.
 
 Why so large here? The training data is deliberately bimodal (45% systematically

@@ -21,7 +21,7 @@ uv venv --python 3.12 .venv            # or: python3.12 -m venv .venv
 VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 source .venv/bin/activate
 
-python -m pytest -q                     # 332 tests, ~15 seconds
+python -m pytest -q                     # 336 tests, ~15 seconds
 ```
 
 `MINIGPT_DEVICE=cpu` forces CPU everywhere, which is useful when you want exact
@@ -76,7 +76,7 @@ tritonsim/        a Triton interpreter on PyTorch — better error messages than
                   (kernels + tritonsim: 1,960 lines)
 lessons/          the curriculum (~3,000 lines of prose, with the numbers)
 scripts/          data prep and the end-to-end experiments
-tests/            the correctness contract: 332 tests, 2,702 lines
+tests/            the correctness contract: 336 tests, 2,812 lines
 results/          the logs behind every number quoted in the lessons
 ```
 
@@ -128,21 +128,36 @@ non-trivial claim here is checked against an independent reference:
 
 Real numbers from this repo on an M1 Max, not quoted from papers.
 
-**Fused kernels beat eager PyTorch by a lot** (`python -m kernels.metal.bench`):
+**Fused kernels beat eager PyTorch by a lot** (`python -m kernels.metal.bench`).
+Timings are median [min–max] over 7 runs — a short GPU kernel is reproducible
+only to ~5–15%, so anything quoted without a spread is not a measurement:
 
 | kernel | Metal | PyTorch eager | speedup |
 |---|---|---|---|
-| RMSNorm (8192×1024) | 405 µs / 166 GB/s | 2929 µs / 23 GB/s | **7.2×** |
-| matmul 1024³ tiled | 2754 µs / 0.78 TFLOP/s | 604 µs / 3.56 TFLOP/s | 0.22× |
+| RMSNorm (8192×1024) | 392 [388–404] µs / 171 GB/s | 2911 µs / 23 GB/s | **7.4× [7.2–7.5]** |
+| matmul 1024³ tiled | 2750 µs / 0.78 TFLOP/s | 619 µs / 3.47 TFLOP/s | 0.22× |
 
 The first row is the case for writing kernels (five memory passes become one);
 the second is the case against (you will not beat a vendor BLAS in an
 afternoon). The tiled matmul is 1.55× the naive one, which is the lesson about
 arithmetic intensity, in numbers.
 
+The benchmark also refuses to let you over-claim: the SIMD-shuffle reduction
+measures 1.2% faster against ±4% noise, and it prints
+`within noise -- not a result` rather than a speedup.
+
 **bf16 autocast is *slower* than fp32 on MPS** — 22.8k vs 29.7k tok/s — because
 Apple's GPU has no bf16 matrix units, so autocast buys casts and no math. On
 CUDA the same flag is a ~2× win. Measure your own hardware.
+
+**An unbalanced evaluation set turns per-task accuracy into a coin flip.** The
+eval set here was once a prefix of a shuffled list, which gives the *training
+mixture*: 92 `sort` prompts, 1 `mul` prompt, and two tasks missing entirely. So
+`mul = 0.00` was reported to two decimals across four lessons on a sample of
+one. Stratified, the same model scores `mul = 0.32`. `generative_eval` now
+returns `n_by_task` and the scripts print `mul=0.32(n=50)`, because a number
+that always travels with its sample size cannot silently become meaningless.
+Lesson 9 has the case study.
 
 **A 10.8M-parameter model on a 419k-token corpus overfits spectacularly**
 (`results/pretrain_overfit_curve.json`): validation loss bottoms at **3.360 at
@@ -164,31 +179,35 @@ end-to-end on held-out perplexity (lesson 10):
 **The post-training pipeline** (`python -m scripts.run_alignment`) trains one
 1.8M-parameter model through four stages on verifiable tasks, ~8 minutes total:
 
+Scored on 400 held-out prompts, **stratified at 50 per task** — an unbalanced
+eval set is how per-task numbers quietly become coin flips (see below):
+
 | stage | held-out exact match (95% CI) | McNemar vs previous |
 |---|---|---|
 | base (pretrained) | 0.000 | |
-| SFT (45% systematically-wrong demos) | 0.643 [0.590, 0.697] | |
-| DPO + NLL | 0.950 [0.923, 0.973] | fixed 104, broke 12, p<0.0001 |
-| GRPO (RLVR) | 0.967 [0.947, 0.987] | fixed 7, broke 2, p=0.18 |
+| SFT (45% systematically-wrong demos) | 0.578 [0.527, 0.625] | |
+| DPO + NLL | 0.892 [0.860, 0.922] | fixed 138, broke 12, p<0.0001 |
+| GRPO (RLVR) | 0.895 [0.863, 0.925] | fixed 6, broke 5, p=1.00 |
 
 **And the same pipeline reproduces a real DPO failure.** With the NLL term
 removed, `python -m scripts.exp_dpo_variants` runs six preference-optimization
 configs from one shared SFT checkpoint:
 
-| config | exact match | Δ vs SFT | final reward accuracy |
-|---|---|---|---|
-| plain DPO β=0.1 | **0.203** | −0.343 | 1.000 |
-| DPO β=0.5 | 0.433 | −0.113 | 1.000 |
-| **DPO + NLL (RPO)** | **0.967** | **+0.420** | 1.000 |
-| IPO β=0.5 | 0.963 | +0.417 | 1.000 |
-| SimPO | 0.623 | +0.077 | 1.000 |
-| DPO, mixed rejected samples | 0.857 | +0.310 | 0.900 |
+| config | exact match | Δ vs SFT | reward accuracy | logp_chosen |
+|---|---|---|---|---|
+| plain DPO β=0.1 | **0.415** | −0.163 | 0.978 | −4.60 |
+| DPO β=0.5 | 0.412 | −0.165 | 1.000 | −3.53 |
+| **DPO + NLL (RPO)** | **0.892** | **+0.315** | 1.000 | −0.71 |
+| IPO β=0.5 | 0.890 | +0.312 | 1.000 | −0.41 |
+| SimPO | 0.555 | −0.022 | 1.000 | −1.42 |
+| DPO, mixed rejected samples | 0.750 | +0.172 | 0.889 | −1.05 |
 
-Reward accuracy is ~1.0 in every row — the preference objective is solved
-perfectly while task accuracy ranges from 0.20 to 0.97. Plain DPO learned
-"smaller is better" from systematically-biased rejected samples and overshot
-past the correct answer. Lesson 7 walks through the mechanism and the fixes; the
-raw logs are in `results/`.
+Reward accuracy is 0.98–1.00 in every row — the preference objective is solved
+while task accuracy ranges from 0.41 to 0.89. Plain DPO learned "smaller is
+better" from systematically-biased rejected samples: 81 of its numeric answers
+are correct and essentially *every* error is negative, clustered at −1, −10,
+−11, −12. Lesson 7 walks through the mechanism and the fixes; the raw logs are
+in `results/`.
 
 ## Hardware notes
 

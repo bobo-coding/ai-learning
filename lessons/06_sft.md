@@ -107,9 +107,26 @@ in training. Random row splitting would let `12 + 7 =` appear in both halves and
 turn the benchmark into a memorisation check. A surprising amount of published
 arithmetic accuracy is obtained this way by accident.
 
-**Report per task, always.** An aggregate hides that the model nailed `add` and
-learned nothing about `mul` — the most common way an alignment experiment looks
-like it worked when it did not. See below.
+**The evaluation set is stratified, and every per-task score is reported with
+its n.** This is not fussiness — it is the fix for a real bug that was in this
+repo. The eval set used to be `val_ex[:300]`, a prefix of a shuffled list, which
+gives you the *training mixture* rather than a balanced benchmark:
+
+```
+before (val[:300]):  sort 92, max 89, add 70, sub 45, count 3, mul 1
+                     reverse 0, last 0        <- absent entirely
+after  (stratified): 50 of every task
+```
+
+So `mul = 0.00` was **one example**, quoted to two decimal places, and two tasks
+were missing from every table without anyone noticing. `stratified_sample` and
+`generative_eval`'s `n_by_task` exist so that cannot recur. Lesson 9 has the
+general version of this argument.
+
+Two of the tasks also had prompt spaces too small to hold out from at all:
+`reverse` and `last` were capped by a 37-word list, leaving 4 held-out prompts
+each. `WORDS` is now 437 entries (deterministically generated pseudo-words) and
+`mul` runs to 19×19 rather than 12×12.
 
 ## The measured result
 
@@ -119,14 +136,24 @@ python -m scripts.run_alignment
 
 45% of the demonstrations are deliberately wrong, in a *consistent* way
 (`systematic_corrupt`: always off-by-one upward, always drop the last list
-element). After 3 epochs on 52,796 demonstrations:
+element). After 3 epochs on 52,717 demonstrations, scored on 400 held-out
+prompts, 50 per task:
 
 | | exact match (95% CI) |
 |---|---|
 | base (pretrained) | 0.000 |
-| **SFT** | **0.643** [0.590, 0.697] |
+| **SFT** | **0.578** [0.527, 0.625] |
 
-Per task: `add=0.61 sub=0.60 max=0.69 sort=0.65 count=0.67 mul=0.00`
+| task | n | SFT |
+|---|---|---|
+| last | 50 | 1.00 |
+| sort | 50 | 0.92 |
+| reverse | 50 | 0.62 |
+| add | 50 | 0.56 |
+| sub | 50 | 0.46 |
+| count | 50 | 0.40 |
+| max | 50 | 0.34 |
+| mul | 50 | 0.32 |
 
 Three things to read off that:
 
@@ -138,16 +165,22 @@ stop token. That part of SFT is easy and works on the first epoch.
 faithfully reproduced the demonstrators' mistake, because cross-entropy fits
 whatever distribution you show it.
 
-**`mul = 0.00` is a generalization failure, not a bias.** `mul` has only 169
-possible prompts and 12% are held out, so the ~20 evaluation prompts were never
-seen. Multiplication requires memorising a table, and the model memorised only
-the entries it saw. This is what "report per task" is for.
+**The per-task spread is the interesting part, and it tracks task structure.**
+`last` is trivial (copy one character) and is solved. `sort` is nearly solved
+because the systematic corruption there — dropping the final element — is easy
+to distinguish from the majority pattern. `max` and `count` sit lowest because
+the off-by-one corruption produces an answer that is *itself plausible* for
+those tasks, so the two modes are hardest to separate. `mul` at 0.32 is a
+genuine generalization limit: 19×19 products, 12% held out, and the model has to
+interpolate a multiplication table it only partly saw.
 
 ### The noise matters more than its amount
 
 Running the same pipeline with `--random-noise` (each wrong demonstration wrong
-in a *different* way) gives **0.963** instead of 0.643 — from the same 45%
-corruption rate.
+in a *different* way) gives **0.963** instead of 0.578 — from the same 45%
+corruption rate. (That figure predates the stratified eval set, so treat it as
+indicative rather than directly comparable; the direction and the size of the
+gap are the point.)
 
 Unbiased label noise is averaged away by cross-entropy: the correct answer
 remains the single most likely continuation, and the noise only flattens the
@@ -157,8 +190,8 @@ question to ask is not how much, but whether the errors correlate.
 
 ### Greedy vs sampled
 
-Same checkpoint: **0.643 greedy** vs **0.535 pass@1 at temperature 1.0**. And
-`pass@8 = 0.983` — the model can produce the right answer for almost every
+Same checkpoint: **0.578 greedy** vs **0.477 pass@1 at temperature 1.0**. And
+`pass@8 = 0.953` — the model can produce the right answer for almost every
 prompt, it just does not reliably put it first. That gap is the room lessons 7
 and 8 work in.
 
@@ -166,10 +199,11 @@ A benchmark number without a stated decoding policy is not a number.
 
 ### One honest caveat
 
-MPS reductions are not bit-deterministic, and the same SFT configuration
-produced **0.547** and **0.643** on two runs with identical seeds. That 10-point
-swing is larger than the 2.8-point sampling error, because the training data is
-deliberately bimodal (45% consistently biased) and the model sits near a
+MPS reductions are not bit-deterministic, and this SFT configuration has
+produced **0.547**, **0.578** and **0.643** across runs with identical seeds
+(the first two on different eval sets, so compare only the last two loosely).
+The swing is larger than the ~2.5-point sampling error, because the training
+data is deliberately bimodal (45% consistently biased) and the model sits near a
 decision boundary between the two modes, so small numerical differences tip many
 items at once.
 

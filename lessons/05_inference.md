@@ -16,9 +16,14 @@ Three separable concerns that people constantly conflate:
 ## The bandwidth argument, quantitatively
 
 Llama-7B in fp16 is 13.5 GB of weights. One token needs all of them read once.
-On an 800 GB/s A100 that is a floor of ~17 ms/token ≈ 59 tok/s, *regardless of
-how fast the arithmetic is*: 14 GFLOP at 300 TFLOP/s would take 0.05 ms. You are
-280× away from compute-bound.
+Take an A100's published figures — 800 GB/s HBM bandwidth and ~312 TFLOP/s
+fp16 tensor-core peak; both are vendor specs, not measured here — and that is a
+floor of ~17 ms/token ≈ 59 tok/s, *regardless of how fast the arithmetic is*:
+14.3 GFLOP at 300 TFLOP/s would take 0.048 ms. You are **350× away** from
+compute-bound.
+
+(The 13.5 GB, 14.3 GFLOP, 17 ms and 350× all follow from `GPTConfig` and are
+checked in `tests/test_model.py`; only the A100 numbers are quoted.)
 
 Two consequences:
 
@@ -40,12 +45,19 @@ python -m scripts.sample --ckpt out/pretrain_reg/best.pt --bench
 ```
 
 ```
-with KV cache             198.8 ms     643.8 tok/s
-no cache (recompute)      368.8 ms     347.0 tok/s
+with KV cache            188.9 ms [188-191]    677.5 tok/s  +/-1%
+no cache (recompute)     263.3 ms [262-267]    486.2 tok/s  +/-2%
+-> cache speedup 1.39x at 128 tokens (range 1.37-1.42x)
 ```
 
-1.86× for 128 tokens on a tiny model; the gap grows linearly with sequence
-length. At 2048 tokens it is an order of magnitude.
+**1.39×** for 128 new tokens on a tiny model, reproducible to ±2% over five
+measurements. The gap grows with sequence length — the cached path is O(T) and
+the uncached one O(T²) — so this is the *least* impressive setting for it;
+exercise 3 asks you to fit the exponents.
+
+(An earlier version of this lesson claimed 1.86× from a single run whose
+uncached measurement had not warmed up. If you quote a speedup, quote its
+spread.)
 
 The cache is preallocated to `max_seq_len` and written in place, so generation
 never reallocates. Its size —
@@ -172,9 +184,10 @@ Expected speedup:
 accepted_per_round / (1 + g · cost_draft/cost_target)
 ```
 
-So you want a draft that is both cheap *and* well-aligned. In practice: a
-1–2 order of magnitude smaller model from the same family, `g` ≈ 4–8, and ~70%
-acceptance gives ~2× end to end. The variants (Medusa, EAGLE, n-gram lookup)
+So you want a draft that is both cheap *and* well-aligned. Commonly reported
+practice — not measured here, since it needs two real models — is a draft 1–2
+orders of magnitude smaller from the same family, `g` ≈ 4–8, and ~70% acceptance
+for roughly 2× end to end. The variants (Medusa, EAGLE, n-gram lookup)
 all attack the same ratio from different directions.
 
 ## Scoring

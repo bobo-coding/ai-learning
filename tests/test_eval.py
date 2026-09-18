@@ -174,7 +174,10 @@ def test_generative_eval_reports_per_task_and_overall():
            Example("last", "last of cat =", "t")]
     res = generative_eval(m, template, exs, reward_exact, max_new_tokens=5,
                           device="cpu", return_samples=3)
-    assert set(res) >= {"overall", "add", "last", "samples"}
+    assert set(res) >= {"overall", "add", "last", "samples", "n", "n_by_task"}
+    # n must accompany every per-task score -- the guard against n=1 columns
+    assert res["n"] == 3
+    assert res["n_by_task"] == {"add": 2, "last": 1}
     assert len(res["samples"]) == 3
     assert 0.0 <= res["overall"] <= 1.0
     # overall must be the mean of the per-example rewards

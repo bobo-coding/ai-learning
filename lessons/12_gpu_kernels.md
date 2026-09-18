@@ -16,7 +16,7 @@ recognise everything.
 | thread | thread | one lane of execution |
 | warp (32) | SIMD-group (32) | lanes in lockstep |
 | block / threadgroup | threadgroup | shares fast memory |
-| `__shared__` | `threadgroup` | ~64 KB, ~L1 latency |
+| `__shared__` | `threadgroup` | fast on-chip scratch, ~L1 latency (tens of KB; the exact budget is per-architecture) |
 | `__syncthreads()` | `threadgroup_barrier(...)` | block-wide barrier |
 | `__shfl_down_sync` | `simd_shuffle_down` / `simd_sum` | lane-to-lane register move |
 | `threadIdx.x` | `thread_position_in_threadgroup` | |
@@ -39,13 +39,20 @@ lanes.
 One thread per element, plus a bounds check. Then a grid-stride variant that
 decouples the grid from the problem size. The measured result is the lesson:
 
-| version | time | bandwidth |
-|---|---|---|
-| one thread per element | 342 µs | **147 GB/s** |
-| grid-stride, 4096 threads | 740 µs | 68 GB/s |
-| `torch a + b` | 338 µs | 149 GB/s |
+All timings below are `median [min–max]` over 7 independent measurements
+(`--repeats 7`). GPU clocks drift with thermal state, so a single run of a short
+kernel is reproducible only to ~5–15% — and a difference smaller than that
+interval is not a result. This matters: an earlier version of this lesson
+reported an "11% improvement" from the SIMD reduction that turns out to be 1.2%
+against ±4% noise.
 
-The grid-stride loop is 2× *slower*. Not because of the loop, but because 4096
+| version | time (µs) | bandwidth |
+|---|---|---|
+| one thread per element | 356 [351–361] | **141 GB/s** |
+| grid-stride, 4096 threads | 858 [762–881] | 59 GB/s |
+| `torch a + b` | 341 [324–355] | 148 GB/s |
+
+The grid-stride loop is **2.4× slower**. Not because of the loop, but because 4096
 threads cannot keep enough memory requests in flight to saturate bandwidth. For
 a memory-bound kernel, **occupancy is the whole game** — you need thousands of
 concurrent outstanding loads to hide DRAM latency.
@@ -73,13 +80,28 @@ SIMD-group with **no shared memory and no barrier at all** — the lanes are
 already in lockstep. Reduce the ≤8 per-SIMD partials at the end. `log2(TG)`
 barriers become 1.
 
-| version | time | bandwidth |
+| version | time (µs) | bandwidth |
 |---|---|---|
-| tree reduction | 301 µs | 55.8 GB/s |
-| `simd_sum` | 269 µs | 62.5 GB/s |
-| `torch x.sum(-1)` | 239 µs | 70.2 GB/s |
+| tree reduction | 300 [297–305] | 55.9 GB/s |
+| `simd_sum` | 296 [289–302] | 56.6 GB/s |
+| `torch x.sum(-1)` | 268 [251–270] | 62.6 GB/s |
 
-11% from removing the barriers, and still 12% behind PyTorch.
+**`simd_sum` is 1.2% faster, against ±4% measurement noise — which is to say,
+not measurably faster at all.** The benchmark prints exactly that verdict:
+
+```
+-> simd_sum is 1.2% faster; measurement noise is +/-4%  (within noise -- not a result)
+```
+
+That is worth sitting with. The barrier-free version *should* be faster, the
+argument for it is sound, and at this size it makes no difference — because the
+kernel is bound by reading 16 MB from DRAM, not by the handful of barriers.
+Removing `log2(256) = 8` barriers from a kernel that spends 300 µs on memory
+buys you nothing. Optimise the bound you are actually on.
+
+(An earlier version of this lesson claimed 11% here, from a single run. It was
+noise, and it is exactly the mistake the repeat-measurement harness exists to
+prevent.)
 
 ### 3. `softmax_rows` — stable multi-pass reduction
 
@@ -101,13 +123,13 @@ y = x / √(mean(x²) + ε) · g
 In eager PyTorch that is `pow`, `mean`, `rsqrt`, `mul`, `mul` — five kernels,
 each reading and writing the whole tensor. Fused: read `x` twice, write once.
 
-| | time | bandwidth |
+| | time (µs) | bandwidth |
 |---|---|---|
-| **Metal fused** | **405 µs** | **165.6 GB/s** |
-| torch eager (5 kernels) | 2929 µs | 22.9 GB/s |
+| **Metal fused** | **392 [388–404]** | **171 GB/s** |
+| torch eager (5 kernels) | 2911 [2897–2921] | 23.1 GB/s |
 
-**7.2× faster**, and the fused version runs at 166 GB/s — essentially the
-machine's measured peak. This is the case for hand-written kernels, in one
+**7.4× faster (range 7.2–7.5× across runs)**, and the fused version runs at
+171 GB/s — essentially the machine's measured peak. This is the case for hand-written kernels, in one
 number: for memory-bound elementwise chains, eliminating round-trips to DRAM is
 free performance that no amount of ALU tuning can match. It is also exactly what
 `torch.compile` does automatically, which is why you should try that first.
@@ -136,13 +158,15 @@ Both barriers are mandatory and for *different* reasons — the first publishes
 the tile, the second stops a fast thread from overwriting it while a slow one is
 still reading.
 
-| 1024³ | time | TFLOP/s |
+| 1024³ | time (µs) | TFLOP/s |
 |---|---|---|
-| naive | 4269 µs | 0.50 |
-| tiled (16×16) | 2754 µs | **0.78** (1.55× naive) |
-| `torch a @ b` | 604 µs | **3.56** (4.6× tiled) |
+| naive | 4261 [4247–4287] | 0.50 |
+| tiled (16×16) | 2750 [2715–2755] | **0.78** (1.55× naive) |
+| `torch a @ b` | 619 [617–622] | **3.47** (4.44× tiled) |
 
-1.55× from tiling — and still 4.6× behind the vendor library. That gap is the
+1.55× from tiling — and still 4.4× behind the vendor library. Note these are the
+*stable* measurements in the file (±1%): a 4.3 ms kernel averages over far more
+thermal noise than a 300 µs one. That gap is the
 honest lesson: the next steps are register blocking (several outputs per thread,
 which is the single biggest remaining win), double-buffered tile loads, and
 vectorised `float4` accesses. A production BLAS also picks tile sizes per shape
@@ -159,8 +183,8 @@ exists anywhere. This is lesson 2's algorithm, transcribed.
 Correctness: matches `F.scaled_dot_product_attention` to 1e-6, causal and
 non-causal, for several shapes.
 
-Performance: **~15× slower than PyTorch's fused kernel**, and the benchmark
-prints exactly that. The reason is structural, not a bug: each threadgroup walks
+Performance: **~17× slower than PyTorch's fused kernel** (6.89 ms vs 0.41 ms at
+B1 H8 T512 D64), and the benchmark prints exactly that. The reason is structural, not a bug: each threadgroup walks
 the keys *serially* and does a full block-wide reduction per key, so
 reduction latency sets the runtime. Production kernels tile over **queries**
 too, so one K/V tile in threadgroup memory feeds 32–128 queries and the inner
@@ -218,7 +242,7 @@ your algorithm.
 
 1. **Try `torch.compile` first.** It does fusion 4 automatically.
 2. **Write one when you need fusion that the compiler will not do** — that is
-   where the 7.2× lives.
+   where the 7.4× lives.
 3. **Write one when you need an algorithm the framework does not have** —
    FlashAttention, paged attention, fused MoE dispatch.
 4. **Do not write matmul.** Ever.
@@ -235,14 +259,15 @@ your algorithm.
 
 3. **Vectorise `vector_add`** with `float4` loads. Memory-bound kernels
    typically go from ~70% to ~90% of peak bandwidth. Then explain why it helps at
-   all, given that the total bytes are unchanged.
+   all, given that the total bytes are unchanged. Use `--repeats 9` and check
+   that your gain exceeds the printed interval before believing it.
 
 4. **Sweep the threadgroup size** for `row_sum` at 64, 128, 256, 512, 1024 and
    for several row lengths. Plot the optimum. Why is the largest not always best?
 
 5. **Tile flash attention over queries.** Give each threadgroup `BLOCK_M = 32`
    queries and stage the K/V tile in threadgroup memory. You should close most of
-   the 15× gap. This is the hardest exercise here and the most instructive.
+   the 17× gap. This is the hardest exercise here and the most instructive.
 
 6. **Fuse a bigger chain.** Write one kernel for `RMSNorm → q/k/v projection`,
    avoiding the intermediate normalized tensor entirely. Measure against the

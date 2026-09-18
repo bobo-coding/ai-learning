@@ -1,69 +1,75 @@
 evaluating the SFT starting point
-  SFT held-out exact match: 0.547
+  SFT held-out exact match: 0.578
 
 === DPO b=0.1 ===
-dpo step    0/825 | loss 0.6931 | acc 0.359 | margin -0.000 | logp_w -0.71 logp_l -0.80
-dpo step  412/825 | loss 0.2887 | acc 1.000 | margin +1.997 | logp_w -2.89 logp_l -23.00
-dpo step  824/825 | loss 0.2251 | acc 0.983 | margin +2.412 | logp_w -4.52 logp_l -28.85
-  held-out exact match 0.203  95% CI [0.160, 0.250]
-  by task: add=0.01  count=1.00  max=0.46  mul=0.00  sort=0.16  sub=0.02
-  vs SFT: fixed 24, broke 127, p=0.0000
-  final: reward_acc 0.983 margin +2.412 logp_chosen -4.52
+dpo step    0/824 | loss 0.6931 | acc 0.422 | margin +0.000 | logp_w -0.69 logp_l -1.03
+dpo step  411/824 | loss 0.3280 | acc 1.000 | margin +1.284 | logp_w -2.90 logp_l -15.81
+dpo step  822/824 | loss 0.2310 | acc 1.000 | margin +1.946 | logp_w -3.60 logp_l -23.23
+  held-out exact match 0.415  95% CI [0.367, 0.463]
+  overall n=400
+  by task: add=0.00(n=50)  count=0.90(n=50)  last=0.80(n=50)  max=0.54(n=50)  mul=0.16(n=50)  reverse=0.28(n=50)  sort=0.62(n=50)  sub=0.02(n=50)
+  vs SFT: fixed 49, broke 114, p=0.0000
+  final: reward_acc 0.978 margin +1.597 logp_chosen -4.60
 
 === DPO b=0.5 ===
-dpo step    0/825 | loss 0.6931 | acc 0.359 | margin -0.000 | logp_w -0.71 logp_l -0.80
-dpo step  412/825 | loss 0.0553 | acc 1.000 | margin +5.028 | logp_w -1.66 logp_l -11.86
-dpo step  824/825 | loss 0.0247 | acc 1.000 | margin +5.672 | logp_w -2.03 logp_l -13.59
-  held-out exact match 0.433  95% CI [0.377, 0.490]
-  by task: add=0.01  count=0.00  max=0.70  mul=0.00  sort=0.72  sub=0.02
-  vs SFT: fixed 52, broke 86, p=0.0048
-  final: reward_acc 1.000 margin +5.672 logp_chosen -2.03
+dpo step    0/824 | loss 0.6931 | acc 0.422 | margin +0.000 | logp_w -0.69 logp_l -1.03
+dpo step  411/824 | loss 0.0491 | acc 1.000 | margin +4.218 | logp_w -2.14 logp_l -10.64
+dpo step  822/824 | loss 0.0312 | acc 1.000 | margin +5.607 | logp_w -2.88 logp_l -14.27
+  held-out exact match 0.412  95% CI [0.365, 0.460]
+  overall n=400
+  by task: add=0.02(n=50)  count=0.12(n=50)  last=1.00(n=50)  max=0.72(n=50)  mul=0.22(n=50)  reverse=0.78(n=50)  sort=0.42(n=50)  sub=0.02(n=50)
+  vs SFT: fixed 49, broke 115, p=0.0000
+  final: reward_acc 1.000 margin +4.929 logp_chosen -3.53
 
 === DPO b=0.1 + NLL (RPO) ===
-dpo step    0/825 | loss 0.6931 | acc 0.359 | margin -0.000 | logp_w -0.71 logp_l -0.80
-dpo step  412/825 | loss 0.3795 | acc 1.000 | margin +1.215 | logp_w -0.20 logp_l -12.49
-dpo step  824/825 | loss 0.3477 | acc 1.000 | margin +1.284 | logp_w -0.11 logp_l -13.17
-  held-out exact match 0.967  95% CI [0.947, 0.987]
-  by task: add=0.99  count=1.00  max=0.94  mul=0.00  sort=0.99  sub=0.96
-  vs SFT: fixed 134, broke 8, p=0.0000
-  final: reward_acc 1.000 margin +1.284 logp_chosen -0.11
+dpo step    0/824 | loss 0.6931 | acc 0.422 | margin +0.000 | logp_w -0.69 logp_l -1.03
+dpo step  411/824 | loss 0.4205 | acc 1.000 | margin +0.811 | logp_w -0.22 logp_l -8.40
+dpo step  822/824 | loss 0.3326 | acc 1.000 | margin +1.271 | logp_w -0.16 logp_l -13.05
+  held-out exact match 0.892  95% CI [0.860, 0.922]
+  overall n=400
+  by task: add=0.90(n=50)  count=0.94(n=50)  last=1.00(n=50)  max=1.00(n=50)  mul=0.52(n=50)  reverse=0.92(n=50)  sort=0.98(n=50)  sub=0.88(n=50)
+  vs SFT: fixed 138, broke 12, p=0.0000
+  final: reward_acc 1.000 margin +1.025 logp_chosen -0.71
 
 === IPO b=0.5 ===
-dpo step    0/825 | loss 1.0000 | acc 0.359 | margin -0.000 | logp_w -0.71 logp_l -0.80
-dpo step  412/825 | loss 0.0090 | acc 1.000 | margin +0.504 | logp_w -0.36 logp_l -1.50
-dpo step  824/825 | loss 0.0008 | acc 1.000 | margin +0.499 | logp_w -0.33 logp_l -1.55
-  held-out exact match 0.963  95% CI [0.940, 0.983]
-  by task: add=0.91  count=1.00  max=0.99  mul=0.00  sort=1.00  sub=0.93
-  vs SFT: fixed 125, broke 0, p=0.0000
-  final: reward_acc 1.000 margin +0.499 logp_chosen -0.33
+dpo step    0/824 | loss 1.0000 | acc 0.422 | margin +0.000 | logp_w -0.69 logp_l -1.03
+dpo step  411/824 | loss 0.0059 | acc 1.000 | margin +0.498 | logp_w -0.45 logp_l -1.52
+dpo step  822/824 | loss 0.0011 | acc 1.000 | margin +0.499 | logp_w -0.36 logp_l -1.53
+  held-out exact match 0.890  95% CI [0.858, 0.920]
+  overall n=400
+  by task: add=0.90(n=50)  count=0.94(n=50)  last=1.00(n=50)  max=0.98(n=50)  mul=0.56(n=50)  reverse=0.94(n=50)  sort=0.98(n=50)  sub=0.82(n=50)
+  vs SFT: fixed 131, broke 6, p=0.0000
+  final: reward_acc 1.000 margin +0.498 logp_chosen -0.41
 
 === SimPO b=2 g=0.5 ===
-dpo step    0/825 | loss 0.9584 | acc 0.594 | margin +0.047 | logp_w -0.71 logp_l -0.80
-dpo step  412/825 | loss 0.2020 | acc 1.000 | margin +2.388 | logp_w -0.46 logp_l -5.13
-dpo step  824/825 | loss 0.1102 | acc 1.000 | margin +3.318 | logp_w -0.58 logp_l -6.15
-  held-out exact match 0.623  95% CI [0.567, 0.677]
-  by task: add=0.17  count=1.00  max=0.90  mul=0.00  sort=0.90  sub=0.20
-  vs SFT: fixed 78, broke 55, p=0.0560
-  final: reward_acc 1.000 margin +3.318 logp_chosen -0.58
+dpo step    0/824 | loss 0.8824 | acc 0.625 | margin +0.236 | logp_w -0.69 logp_l -1.03
+dpo step  411/824 | loss 0.2282 | acc 1.000 | margin +2.285 | logp_w -0.84 logp_l -4.66
+dpo step  822/824 | loss 0.0916 | acc 1.000 | margin +3.958 | logp_w -1.51 logp_l -8.19
+  held-out exact match 0.555  95% CI [0.505, 0.603]
+  overall n=400
+  by task: add=0.12(n=50)  count=0.62(n=50)  last=1.00(n=50)  max=0.90(n=50)  mul=0.34(n=50)  reverse=0.84(n=50)  sort=0.40(n=50)  sub=0.22(n=50)
+  vs SFT: fixed 79, broke 88, p=0.5360
+  final: reward_acc 1.000 margin +3.868 logp_chosen -1.42
 
 === DPO b=0.1, mixed reject ===
-dpo step    0/825 | loss 0.6931 | acc 0.438 | margin +0.000 | logp_w -0.71 logp_l -7.37
-dpo step  412/825 | loss 0.5138 | acc 0.875 | margin +0.499 | logp_w -0.24 logp_l -14.98
-dpo step  824/825 | loss 0.4124 | acc 0.900 | margin +1.024 | logp_w -0.65 logp_l -16.92
-  held-out exact match 0.857  95% CI [0.817, 0.897]
-  by task: add=0.74  count=0.33  max=0.98  mul=0.00  sort=0.97  sub=0.62
-  vs SFT: fixed 117, broke 24, p=0.0000
-  final: reward_acc 0.900 margin +1.024 logp_chosen -0.65
+dpo step    0/824 | loss 0.6931 | acc 0.453 | margin +0.000 | logp_w -0.69 logp_l -6.97
+dpo step  411/824 | loss 0.5023 | acc 0.859 | margin +0.534 | logp_w -0.33 logp_l -11.07
+dpo step  822/824 | loss 0.4194 | acc 0.891 | margin +1.047 | logp_w -0.43 logp_l -17.66
+  held-out exact match 0.750  95% CI [0.708, 0.790]
+  overall n=400
+  by task: add=0.46(n=50)  count=0.92(n=50)  last=1.00(n=50)  max=0.98(n=50)  mul=0.40(n=50)  reverse=0.90(n=50)  sort=0.72(n=50)  sub=0.62(n=50)
+  vs SFT: fixed 118, broke 49, p=0.0000
+  final: reward_acc 0.889 margin +0.911 logp_chosen -1.05
 
 ====================================================================
 config                      exact match              vs SFT
 ====================================================================
-SFT (start)                       0.547
-DPO b=0.1                         0.203   -0.343  p=0.0000
-DPO b=0.5                         0.433   -0.113  p=0.0048
-DPO b=0.1 + NLL (RPO)             0.967   +0.420  p=0.0000
-IPO b=0.5                         0.963   +0.417  p=0.0000
-SimPO b=2 g=0.5                   0.623   +0.077  p=0.0560
-DPO b=0.1, mixed reject           0.857   +0.310  p=0.0000
+SFT (start)                       0.578
+DPO b=0.1                         0.415   -0.163  p=0.0000
+DPO b=0.5                         0.412   -0.165  p=0.0000
+DPO b=0.1 + NLL (RPO)             0.892   +0.315  p=0.0000
+IPO b=0.5                         0.890   +0.312  p=0.0000
+SimPO b=2 g=0.5                   0.555   -0.022  p=0.5360
+DPO b=0.1, mixed reject           0.750   +0.172  p=0.0000
 
 wrote out/alignment/dpo_variants.json
