@@ -1,0 +1,74 @@
+name: Deploy lessons to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something that ends up on the site changes.
+    paths:
+      - "lessons/**"
+      - "README.md"
+      - "results/**"
+      - "mkdocs.yml"
+      - "scripts/build_docs.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deployments race; queue instead of cancelling, so a push that
+# lands during a deploy still ends up published.
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # build_docs.py asks git which files are tracked, so it needs a
+          # working repo -- but only the tip commit, not the whole history.
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # mkdocs is pinned below 2.0: its maintainers have announced that 2.0
+      # removes the plugin and theming systems with no migration path.
+      - name: Install MkDocs
+        run: pip install "mkdocs>=1.6,<2" "mkdocs-material>=9.5,<10"
+
+      # Generates docs/ from lessons/ + README.md, rewriting links that point
+      # outside the published set to absolute GitHub URLs.
+      - name: Generate site sources
+        run: python -m scripts.build_docs
+
+      # --strict turns an unresolved cross-link into a failed build rather than
+      # a 404 on the published site.
+      - name: Build site
+        run: mkdocs build --strict
+
+      - name: Check for broken internal links
+        run: python -m scripts.check_site_links site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

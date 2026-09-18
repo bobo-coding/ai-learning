@@ -10,6 +10,8 @@ reference implementation — `pytest` is the contract, not the prose.
 Written for someone with a maths and programming background who wants to
 understand *why* each piece is the way it is, not just how to call it.
 
+**Read the lessons online: <https://bobo-coding.github.io/ai-learning/>**
+
 ---
 
 ## Setup
@@ -19,7 +21,7 @@ uv venv --python 3.12 .venv            # or: python3.12 -m venv .venv
 VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 source .venv/bin/activate
 
-python -m pytest -q                     # 301 tests, ~15 seconds
+python -m pytest -q                     # 324 tests, ~15 seconds
 ```
 
 `MINIGPT_DEVICE=cpu` forces CPU everywhere, which is useful when you want exact
@@ -42,17 +44,19 @@ python -m kernels.triton.bench                             # Triton, via interpr
 
 Each lesson is a markdown file in `lessons/` pairing the theory with the code
 that implements it and the experiment that verifies it. Read them in order; the
-code is meant to be read alongside.
+code is meant to be read alongside — either here on GitHub or on the
+[website](https://bobo-coding.github.io/ai-learning/), where every source path
+in a lesson is a link.
 
 | # | Lesson | Code | What you build |
 |---|--------|------|----------------|
 | 0 | [Setup and ground rules](lessons/00_setup.md) | `minigpt/utils.py` | Device selection, timing that isn't a lie, the numerics discipline the rest depends on |
 | 1 | [Tokenization](lessons/01_tokenization.md) | `minigpt/bpe.py` | Byte-level BPE with GPT-2/GPT-4 pre-tokenization, from scratch |
 | 2 | [Attention](lessons/02_attention.md) | `minigpt/attention.py` | The definition → batched → online softmax → FlashAttention forward *and* backward, plus RoPE, GQA, KV cache |
-| 3 | [The transformer](lessons/03_transformer.md) | `minigpt/model.py`, `config.py` | RMSNorm, SwiGLU, pre-norm blocks, weight tying, and the parameter/FLOP/KV-cache arithmetic |
-| 4 | [Pretraining](lessons/04_pretraining.md) | `minigpt/train.py`, `optim.py`, `data.py` | AdamW from scratch, LR schedules, gradient accumulation, clipping, MFU — and a real overfitting curve |
+| 3 | [The transformer](lessons/03_transformer.md) | `minigpt/model.py`, `minigpt/config.py` | RMSNorm, SwiGLU, pre-norm blocks, weight tying, and the parameter/FLOP/KV-cache arithmetic |
+| 4 | [Pretraining](lessons/04_pretraining.md) | `minigpt/train.py`, `minigpt/optim.py`, `minigpt/data.py` | AdamW from scratch, LR schedules, gradient accumulation, clipping, MFU — and a real overfitting curve |
 | 5 | [Inference](lessons/05_inference.md) | `minigpt/generate.py` | Sampling (top-k/top-p/min-p), KV-cache decoding, and provably-exact speculative decoding |
-| 6 | [SFT](lessons/06_sft.md) | `minigpt/sft.py`, `tasks.py` | Chat templates, completion-only loss, and why the stop token must be in the mask |
+| 6 | [SFT](lessons/06_sft.md) | `minigpt/sft.py`, `minigpt/tasks.py` | Chat templates, completion-only loss, and why the stop token must be in the mask |
 | 7 | [Preference optimization](lessons/07_dpo.md) | `minigpt/dpo.py` | DPO derived from the RLHF objective — plus a measured demonstration of how it fails |
 | 8 | [RLVR with GRPO](lessons/08_rlvr_grpo.md) | `minigpt/grpo.py` | Group-relative advantages, PPO clipping, K3 KL, entropy collapse |
 | 9 | [Evaluation](lessons/09_evaluation.md) | `minigpt/eval.py` | Perplexity vs bits-per-byte, three MC scoring rules, unbiased pass@k, and error bars |
@@ -72,9 +76,31 @@ tritonsim/        a Triton interpreter on PyTorch — better error messages than
                   (kernels + tritonsim: 1,960 lines)
 lessons/          the curriculum (~3,000 lines of prose, with the numbers)
 scripts/          data prep and the end-to-end experiments
-tests/            the correctness contract: 301 tests, 2,364 lines
+tests/            the correctness contract: 324 tests, 2,574 lines
 results/          the logs behind every number quoted in the lessons
 ```
+
+## The website
+
+`lessons/` is the single source of truth. A small generator adapts it for the
+web rather than duplicating it:
+
+```bash
+pip install -e ".[docs]"
+python -m scripts.build_docs      # lessons/ + README.md -> docs/
+mkdocs serve                      # preview at localhost:8000
+```
+
+`scripts/build_docs.py` rewrites links that point out of the published set to
+absolute GitHub URLs, and turns inline code spans that name a real tracked file
+into links — so on the site, `minigpt/bpe.py` in a lesson header is clickable.
+It refuses to build if a link points at a file that is not in the repo, which is
+the check that keeps 404s off the site.
+
+`.github/workflows/pages.yml` runs that on every push to `main` that touches a
+lesson, then `mkdocs build --strict`, then `scripts/check_site_links.py` over
+the built HTML, and only then deploys. All three steps are failures, not
+warnings.
 
 ## The correctness discipline
 
