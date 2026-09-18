@@ -177,16 +177,35 @@ interpolate a multiplication table it only partly saw.
 ### The noise matters more than its amount
 
 Running the same pipeline with `--random-noise` (each wrong demonstration wrong
-in a *different* way) gives **0.963** instead of 0.578 — from the same 45%
-corruption rate. (That figure predates the stratified eval set, so treat it as
-indicative rather than directly comparable; the direction and the size of the
-gap are the point.)
+in a *different* way) gives **0.777** instead of **0.578** — from the same 45%
+corruption rate, on the same stratified eval set:
 
-Unbiased label noise is averaged away by cross-entropy: the correct answer
-remains the single most likely continuation, and the noise only flattens the
-distribution around it. A *systematic* bias puts a competing mode in the data,
-and the model learns that mode. When you read "our data is 5% noisy", the
-question to ask is not how much, but whether the errors correlate.
+| task | systematic noise | random noise |
+|---|---|---|
+| last | 1.00 | 1.00 |
+| max | 0.34 | **1.00** |
+| sort | 0.92 | 0.98 |
+| count | 0.40 | **0.94** |
+| reverse | 0.62 | **0.94** |
+| mul | 0.32 | 0.64 |
+| add | 0.56 | 0.42 |
+| sub | 0.46 | 0.30 |
+| **overall** | **0.578** | **0.777** |
+
+Unbiased label noise is largely averaged away by cross-entropy: the correct
+answer remains the single most likely continuation, and the noise mostly
+flattens the distribution around it. A *systematic* bias puts a competing mode
+in the data, and the model learns that mode.
+
+The per-task split shows where that bites hardest. `max` and `count` go from
+0.34/0.40 under systematic noise to 1.00/0.94 under random noise — those are the
+tasks whose small answer spaces make a consistent off-by-one indistinguishable
+from the truth. Meanwhile `add` and `sub` are slightly *worse* under random
+noise, because there the corruption is spread over many wrong answers rather
+than concentrated on one the model can learn to discount.
+
+When you read "our data is 5% noisy", the question to ask is not how much, but
+**whether the errors correlate**.
 
 ### Greedy vs sampled
 

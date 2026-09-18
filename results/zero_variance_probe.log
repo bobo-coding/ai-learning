@@ -1,0 +1,19 @@
+out/align_plaindpo/dpo.pt: 8 rollouts x 12 prompts per task at T=1.0
+
+task       mean reward   zero-var   all-wrong   all-right
+  add            0.000       1.00        1.00        0.00
+  count          0.917       0.83        0.00        0.83
+  last           0.573       0.50        0.17        0.33
+  max            0.344       0.33        0.25        0.08
+  mul            0.146       0.83        0.83        0.00
+  reverse        0.094       0.92        0.83        0.08
+  sort           0.323       0.33        0.25        0.08
+  sub            0.083       0.75        0.75        0.00
+
+  add: every group is all-wrong, so the advantage is
+  identically zero. RLVR cannot improve these at all -- not slowly, not
+  at all. Fix the policy with supervised data first.
+
+  count, mul, reverse: >=80% of groups carry no gradient. Learning
+  here is possible but slow; raise G or the temperature, or drop solved
+  prompts (DAPO-style dynamic sampling).

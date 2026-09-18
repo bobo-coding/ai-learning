@@ -71,7 +71,8 @@ def stage0_pretrain(args, tok, train_ex, device):
     trainer = Trainer(model, TrainConfig(
         batch_size=args.batch_size, max_steps=args.pretrain_steps, lr=args.pretrain_lr,
         warmup_steps=max(1, args.pretrain_steps // 20), eval_interval=max(1, args.pretrain_steps // 4),
-        out_dir=str(OUT / "base"), device=str(device), log_interval=args.pretrain_steps // 10,
+        out_dir=str(Path(args.out_dir) / "base"), device=str(device),
+        log_interval=max(1, args.pretrain_steps // 10),
     ), tr, va)
     trainer.fit()
     return trainer.raw_model
@@ -133,11 +134,18 @@ def main(argv=None):
                          "leave a task with n=1")
     ap.add_argument("--device", default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out-dir", default=str(OUT),
+                    help="where checkpoints and report.json go; use a distinct "
+                         "directory per experiment so runs do not clobber each other")
+    ap.add_argument("--base-ckpt", default=None,
+                    help="reuse this pretrained checkpoint instead of training one "
+                         "(implies --skip-pretrain)")
     ap.add_argument("--skip-pretrain", action="store_true",
-                    help="reuse out/alignment/base/final.pt")
+                    help="reuse <out-dir>/base/final.pt")
     args = ap.parse_args(argv)
 
-    OUT.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device) if args.device else pick_device()
     seed_everything(args.seed)
     tok = build_tokenizer()
@@ -187,8 +195,8 @@ def main(argv=None):
 
     # ---- stage 0: pretrain ----------------------------------------------
     t0 = time.perf_counter()
-    base_path = OUT / "base" / "final.pt"
-    if args.skip_pretrain and base_path.exists():
+    base_path = Path(args.base_ckpt) if args.base_ckpt else out / "base" / "final.pt"
+    if (args.skip_pretrain or args.base_ckpt) and base_path.exists():
         blob = torch.load(base_path, map_location="cpu", weights_only=False)
         base = GPT(GPTConfig(**blob["model_cfg"]))
         base.load_state_dict(blob["model"])
@@ -216,7 +224,7 @@ def main(argv=None):
         log_interval=max(1, len(enc) // args.batch_size // 2), seed=args.seed,
     ), template.pad_id, val_examples=val_enc, device=device)
     torch.save({"model": sft_model.state_dict(), "model_cfg": sft_model.cfg.to_dict()},
-               OUT / "sft.pt")
+               out / "sft.pt")
     r_sft = measure(sft_model, "stage 1: SFT (noisy demonstrations)", with_pass_at_k=True)
     report["stages"]["sft"] = {"seconds": time.perf_counter() - t0, "n_bad": n_bad,
                                "eval": {k: v for k, v in r_sft.items() if k != "samples"},
@@ -240,7 +248,7 @@ def main(argv=None):
         log_interval=max(1, len(pairs) // args.batch_size // 3), seed=args.seed,
     ), template.pad_id, reference=ref, device=device)
     torch.save({"model": dpo_model.state_dict(), "model_cfg": dpo_model.cfg.to_dict()},
-               OUT / "dpo.pt")
+               out / "dpo.pt")
     r_dpo = measure(dpo_model, "stage 2: DPO", with_pass_at_k=True)
     report["stages"]["dpo"] = {
         "seconds": time.perf_counter() - t0,
@@ -272,7 +280,7 @@ def main(argv=None):
         max_new_tokens=14, log_interval=max(1, args.grpo_iters // 10), seed=args.seed,
     ), reference=grpo_ref, device=device, eval_fn=eval_fn)
     torch.save({"model": grpo_model.state_dict(), "model_cfg": grpo_model.cfg.to_dict()},
-               OUT / "grpo.pt")
+               out / "grpo.pt")
     r_grpo = measure(grpo_model, "stage 3: GRPO (RLVR)", with_pass_at_k=True)
     report["stages"]["grpo"] = {
         "seconds": time.perf_counter() - t0,
@@ -305,8 +313,8 @@ def main(argv=None):
               f"{'  (significant)' if t['p_value'] < 0.05 else ''}")
         report["stages"].setdefault("tests", {})[f"{a_lab}_to_{b_lab}"] = t
 
-    (OUT / "report.json").write_text(json.dumps(report, indent=2, default=float))
-    print(f"\nwrote {OUT}/report.json")
+    (out / "report.json").write_text(json.dumps(report, indent=2, default=float))
+    print(f"\nwrote {out}/report.json")
     return 0
 
 

@@ -206,8 +206,14 @@ Reward accuracy is 0.98–1.00 in every row — the preference objective is solv
 while task accuracy ranges from 0.41 to 0.89. Plain DPO learned "smaller is
 better" from systematically-biased rejected samples: 81 of its numeric answers
 are correct and essentially *every* error is negative, clustered at −1, −10,
-−11, −12. Lesson 7 walks through the mechanism and the fixes; the raw logs are
-in `results/`.
+−11, −12. Lesson 7 walks through the mechanism and the fixes.
+
+**And RLVR's limit is measurable, not rhetorical.** Given that collapsed
+checkpoint, GRPO recovers 101 items and breaks 2 — but cannot touch `add`
+(0.00 → 0.06) or `sub` (0.00 → 0.04). `python -m scripts.probe_zero_variance`
+shows why: **100% of `add` groups are all-wrong**, so `A_i = r_i − mean(r)` is
+identically zero and the policy gradient is exactly zero. "RL amplifies what the
+model already has" is arithmetic, not a slogan. Lesson 8 has the table.
 
 ## Hardware notes
 

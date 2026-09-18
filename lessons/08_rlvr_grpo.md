@@ -1,6 +1,7 @@
 # Lesson 8 — RLVR with GRPO
 
-Read: `minigpt/grpo.py` · Tests: `tests/test_alignment.py`
+Read: `minigpt/grpo.py` · Tests: `tests/test_alignment.py` ·
+Probe it: `python -m scripts.probe_zero_variance`
 
 RLVR — reinforcement learning from **verifiable** rewards — is the setup that
 made reasoning models work. If you can check an answer programmatically
@@ -159,31 +160,72 @@ and reporting the delta is how you manufacture a result that will not replicate.
 
 ### Starting from a broken checkpoint
 
-The interesting case. Take a plain-DPO run that collapsed (lesson 7) and give
-GRPO a verifier:
+The interesting case. Take the plain-DPO run from lesson 7 that collapsed, and
+give GRPO a verifier (`--dpo-sft-weight 0`, same 400-prompt stratified eval):
 
-| stage | held-out exact match | McNemar |
+| stage | held-out exact match (95% CI) | McNemar vs previous |
 |---|---|---|
-| SFT | 0.547 | |
-| DPO (plain, β=0.1) | 0.203 | fixed 24, broke 127 |
-| **GRPO after that** | **0.603** | **fixed 120, broke 0**, p<0.0001 |
+| SFT | 0.583 [0.535, 0.630] | |
+| DPO (plain, β=0.1) | 0.380 [0.333, 0.430] | fixed 67, broke 148, p<0.0001 |
+| **GRPO after that** | **0.627** [0.580, 0.675] | fixed 101, broke 2, p<0.0001 |
 
-GRPO **recovered everything plain DPO broke** — 120 items fixed, zero broken.
-That is what a trustworthy reward signal buys you: the verifier does not care
-which direction the policy drifted in, it only rewards correct answers. A
-preference model trained on the same data would have been just as confused as
-DPO was.
+GRPO undid most of the damage — 101 items fixed against 2 broken — which is what
+a trustworthy reward signal buys you. The verifier does not care which direction
+the policy drifted in; it only rewards correct answers.
 
-(Those three figures come from an earlier run on the *unstratified* eval set —
-see `results/alignment_plain_dpo.log`. The per-task columns from that run are
-not trustworthy for the reason lesson 9 explains, but the overall numbers rest
-on n=300 and the McNemar counts are paired, so the conclusion stands.)
+But look at the per-task columns, because the aggregate hides the real result:
 
-**RL amplifies capabilities the model already has; it does not install new
-ones.** In the first table `mul` moves 0.52 → 0.54 and nothing else improves,
-because with `zero_var_frac` high, GRPO almost never saw a group where some
-samples got a hard prompt right and others wrong. There is no gradient without
-disagreement.
+| task | SFT | after plain DPO | after GRPO | |
+|---|---|---|---|---|
+| last | 0.98 | 0.48 | **1.00** | fully recovered |
+| max | 0.34 | 0.64 | **0.96** | recovered and improved |
+| sort | 0.94 | 0.52 | **0.92** | fully recovered |
+| reverse | 0.56 | 0.28 | **0.86** | recovered and improved |
+| count | 0.24 | 0.92 | 0.94 | — |
+| mul | 0.36 | 0.20 | 0.24 | barely moved |
+| **add** | **0.70** | **0.00** | **0.06** | **not recovered** |
+| **sub** | **0.54** | **0.00** | **0.04** | **not recovered** |
+
+**GRPO could not recover `add` and `sub` at all**, and `SFT → GRPO` overall is
+p = 0.205 — statistically indistinguishable from never having run DPO.
+
+### Why: zero-variance groups, measured
+
+This is the failure mode from the top of the lesson, caught in the act.
+`python -m scripts.probe_zero_variance --ckpt out/align_plaindpo/dpo.pt` samples
+8 rollouts each for 12 prompts per task from the *collapsed* checkpoint, before
+GRPO starts:
+
+| task | mean reward | zero-variance groups | all-wrong groups | recovered? |
+|---|---|---|---|---|
+| add | 0.000 | **1.00** | **1.00** | no |
+| sub | 0.083 | 0.75 | 0.75 | no |
+| mul | 0.146 | 0.83 | 0.83 | barely |
+| reverse | 0.094 | 0.92 | 0.83 | yes |
+| max | 0.344 | **0.33** | 0.25 | yes |
+| sort | 0.323 | **0.33** | 0.25 | yes |
+| last | 0.573 | 0.50 | 0.17 | yes |
+| count | 0.917 | 0.83 | 0.00 | already fine |
+
+For `add`, **every group is unanimous and every group is wrong.** The advantage
+`A_i = r_i − mean(r)` is exactly 0 for all 8 samples of all 12 prompts, so the
+policy gradient is exactly 0. GRPO does not "struggle" with `add` — it receives
+literally no signal about it, and would not if you ran it for a million
+iterations.
+
+The tasks it recovered are the ones with the *lowest* zero-variance fraction
+(`max` and `sort` at 0.33). `reverse` is the instructive middle case: 83% of its
+groups were all-wrong at the start, but the remaining 17% were enough to
+bootstrap, and as the policy improved, variance — and therefore gradient —
+appeared.
+
+**This is the practical statement of "RL amplifies what the model already has".**
+It is not a vague claim about capabilities; it is arithmetic. If the policy
+cannot produce a correct answer in `G` samples, the group has no variance, the
+advantage is zero, and nothing happens. Raising `G`, raising the temperature, or
+shaping the reward (lesson 8's `reward_shaped`) are all attempts to manufacture
+variance where there is none — and the honest alternative is to fix the policy
+with supervised data first.
 
 ## Implementation notes
 

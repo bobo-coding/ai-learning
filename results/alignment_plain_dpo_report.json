@@ -1,0 +1,165 @@
+{
+  "args": {
+    "n_examples": 60000,
+    "n_layer": 4,
+    "n_head": 4,
+    "n_embd": 192,
+    "block_size": 64,
+    "batch_size": 64,
+    "pretrain_steps": 1500,
+    "pretrain_lr": 0.001,
+    "sft_epochs": 3,
+    "sft_lr": 0.0005,
+    "sft_noise": 0.45,
+    "random_noise": false,
+    "dpo_epochs": 1,
+    "dpo_lr": 1e-05,
+    "dpo_beta": 0.1,
+    "dpo_variant": "sigmoid",
+    "dpo_sft_weight": 0.0,
+    "grpo_iters": 120,
+    "grpo_lr": 2e-05,
+    "grpo_group": 8,
+    "grpo_prompts": 8,
+    "eval_per_task": 50,
+    "device": null,
+    "seed": 0,
+    "out_dir": "out/align_plaindpo",
+    "base_ckpt": "out/alignment/base/final.pt",
+    "skip_pretrain": false
+  },
+  "stages": {
+    "pretrain": {
+      "seconds": 0.0505955420085229,
+      "eval": {
+        "overall": 0.0,
+        "n": 400,
+        "n_by_task": {
+          "add": 50,
+          "count": 50,
+          "last": 50,
+          "max": 50,
+          "mul": 50,
+          "reverse": 50,
+          "sort": 50,
+          "sub": 50
+        },
+        "add": 0.0,
+        "count": 0.0,
+        "last": 0.0,
+        "max": 0.0,
+        "mul": 0.0,
+        "reverse": 0.0,
+        "sort": 0.0,
+        "sub": 0.0
+      }
+    },
+    "sft": {
+      "seconds": 108.47539420897374,
+      "n_bad": 23806,
+      "eval": {
+        "overall": 0.5825,
+        "n": 400,
+        "n_by_task": {
+          "add": 50,
+          "count": 50,
+          "last": 50,
+          "max": 50,
+          "mul": 50,
+          "reverse": 50,
+          "sort": 50,
+          "sub": 50
+        },
+        "add": 0.7,
+        "count": 0.24,
+        "last": 0.98,
+        "max": 0.34,
+        "mul": 0.36,
+        "reverse": 0.56,
+        "sort": 0.94,
+        "sub": 0.54,
+        "pass@1": 0.486328125,
+        "pass@4": 0.8734375000000002,
+        "pass@8": 0.9375
+      },
+      "final_loss": 0.22430410981178284
+    },
+    "dpo": {
+      "seconds": 70.86054887500359,
+      "eval": {
+        "overall": 0.38,
+        "n": 400,
+        "n_by_task": {
+          "add": 50,
+          "count": 50,
+          "last": 50,
+          "max": 50,
+          "mul": 50,
+          "reverse": 50,
+          "sort": 50,
+          "sub": 50
+        },
+        "add": 0.0,
+        "count": 0.92,
+        "last": 0.48,
+        "max": 0.64,
+        "mul": 0.2,
+        "reverse": 0.28,
+        "sort": 0.52,
+        "sub": 0.0,
+        "pass@1": 0.3125,
+        "pass@4": 0.4584821428571428,
+        "pass@8": 0.53125
+      },
+      "final_reward_accuracy": 0.9777777791023254,
+      "final_reward_margin": 1.5848299264907837
+    },
+    "grpo": {
+      "seconds": 29.659302124986425,
+      "eval": {
+        "overall": 0.6275,
+        "n": 400,
+        "n_by_task": {
+          "add": 50,
+          "count": 50,
+          "last": 50,
+          "max": 50,
+          "mul": 50,
+          "reverse": 50,
+          "sort": 50,
+          "sub": 50
+        },
+        "add": 0.06,
+        "count": 0.94,
+        "last": 1.0,
+        "max": 0.96,
+        "mul": 0.24,
+        "reverse": 0.86,
+        "sort": 0.92,
+        "sub": 0.04,
+        "pass@1": 0.603515625,
+        "pass@4": 0.6638392857142857,
+        "pass@8": 0.6875
+      },
+      "reward_first": 0.109375,
+      "reward_last": 0.859375
+    },
+    "tests": {
+      "SFT_to_DPO": {
+        "b01": 67.0,
+        "b10": 148.0,
+        "p_value": 3.3887173527472314e-08
+      },
+      "DPO_to_GRPO": {
+        "b01": 101.0,
+        "b10": 2.0,
+        "p_value": 1.05648196731724e-27
+      },
+      "SFT_to_GRPO": {
+        "b01": 99.0,
+        "b10": 81.0,
+        "p_value": 0.20499173682591762
+      }
+    }
+  }
+}
