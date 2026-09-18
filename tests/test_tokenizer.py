@@ -169,3 +169,131 @@ def test_char_tokenizer_save_load(tmp_path):
     tok2 = CharTokenizer.load(p)
     assert tok2.chars == tok.chars
     assert tok2.encode("abc<|end|>") == tok.encode("abc<|end|>")
+
+
+# ---------------------------------------------------------------------------
+# The worked examples quoted in lessons/01_tokenization.md.
+#
+# The lesson prints real trace output rather than a hand-written illustration,
+# so these tests exist to make the lesson wrong-proof: if the implementation
+# changes, the lesson's numbers stop matching and CI says so.
+# ---------------------------------------------------------------------------
+
+LESSON_DEMO = (
+    "low low low low low lower lower newest newest newest newest newest "
+    "widest widest widest"
+)
+
+
+def _learned(tok):
+    return {i: tok.vocab[i].decode() for i in sorted(tok.vocab) if i >= 256}
+
+
+def _as_text(tok, ids):
+    return [tok.vocab[i].decode("utf-8", errors="replace") for i in ids]
+
+
+def test_lesson_demo_learns_the_documented_merges():
+    """Lesson 1 quotes these six merges, in this order, with these ids."""
+    tok = BPETokenizer().train(LESSON_DEMO, vocab_size=262)
+    assert _learned(tok) == {
+        256: "st", 257: "est", 258: "ow", 259: "low", 260: " low", 261: "west",
+    }
+
+
+def test_lesson_demo_merge_order_is_a_tree():
+    """Each merge after the first builds on an earlier one -- the lesson's point."""
+    tok = BPETokenizer().train(LESSON_DEMO, vocab_size=262)
+    pairs = list(tok.merges)
+    assert pairs[1][1] == 256, "merge 2 must consume token 256 ('st')"
+    assert pairs[3][1] == 258, "merge 4 must consume token 258 ('ow')"
+    assert pairs[4][1] == 259, "merge 5 must consume token 259 ('low')"
+    assert pairs[5][1] == 257, "merge 6 must consume token 257 ('est')"
+
+
+def test_lesson_demo_learns_a_leading_space_token():
+    """' low' as one token is the pre-tokenization behaviour the lesson explains."""
+    tok = BPETokenizer().train(LESSON_DEMO, vocab_size=262)
+    assert b" low" in tok.vocab.values()
+
+
+def test_lesson_encoding_trace_of_lowest():
+    """The four-step trace in the lesson, checked end to end."""
+    tok = BPETokenizer().train(LESSON_DEMO, vocab_size=262)
+    ids = tok.encode_ordinary("lowest")
+    assert _as_text(tok, ids) == ["low", "est"]
+    assert tok.decode(ids) == "lowest"
+
+
+def test_lesson_step3_tie_is_decided_by_merge_rank():
+    """At step 3 both ('o','w')=258 and ('w','est')=261 apply; 258 must win.
+
+    This is the single claim that distinguishes BPE from longest-match, so it is
+    asserted on the intermediate state rather than only on the final output.
+    """
+    tok = BPETokenizer().train(LESSON_DEMO, vocab_size=262)
+    ids = [108, 111, 119, 257]                      # ['l', 'o', 'w', 'est']
+    applicable = {p: tok.merges[p] for p in zip(ids, ids[1:]) if p in tok.merges}
+    assert applicable == {(111, 119): 258, (119, 257): 261}
+    assert min(applicable.values()) == 258
+
+
+def test_lesson_bpe_differs_from_greedy_longest_match():
+    """The minimal 'aaaa' case the lesson uses to make the difference concrete."""
+    tok = BPETokenizer().train("aaa aaa aaa aaa", vocab_size=258)
+    assert _learned(tok) == {256: "aa", 257: "aaa"}
+    for text, expected in [("aaaa", ["aa", "aa"]),
+                           ("aaaaa", ["aa", "aaa"]),
+                           ("aaaaaa", ["aa", "aa", "aa"])]:
+        ids = tok.encode_ordinary(text)
+        assert _as_text(tok, ids) == expected
+        assert tok.decode(ids) == text, "and it must still round-trip"
+
+
+def test_greedy_longest_match_really_would_differ():
+    """Implement the wrong algorithm, to prove the lesson's comparison is real."""
+    tok = BPETokenizer().train("aaa aaa aaa aaa", vocab_size=258)
+    by_len = sorted(tok.vocab.items(), key=lambda kv: -len(kv[1]))
+
+    def greedy(text):
+        data, out, i = text.encode(), [], 0
+        while i < len(data):
+            for tid, blob in by_len:
+                if data[i : i + len(blob)] == blob:
+                    out.append(tid)
+                    i += len(blob)
+                    break
+        return out
+
+    assert _as_text(tok, greedy("aaaa")) == ["aaa", "a"]
+    assert _as_text(tok, greedy("aaaaaa")) == ["aaa", "aaa"]
+    assert greedy("aaaa") != tok.encode_ordinary("aaaa")
+
+
+def test_weighted_training_matches_positional_training():
+    """The frequency-table optimisation must be exact, not approximate.
+
+    The lesson claims 3-11x faster with *identical* output; this asserts the
+    identical half (the timing half is in the lesson's table).
+    """
+    from collections import Counter
+
+    from minigpt.bpe import get_pair_counts
+
+    text = LESSON_DEMO
+    n_merges = 6
+
+    ref = BPETokenizer()
+    seqs = [list(f.encode()) for f in ref._re.findall(text)]   # every occurrence
+    positional = {}
+    for i in range(n_merges):
+        counts = Counter()
+        for s in seqs:
+            if len(s) >= 2:
+                get_pair_counts(s, counts, weight=1)
+        pair = max(counts, key=lambda p: (counts[p], p))
+        seqs = [merge(s, pair, 256 + i) if len(s) >= 2 else s for s in seqs]
+        positional[pair] = 256 + i
+
+    weighted = BPETokenizer().train(text, vocab_size=256 + n_merges)
+    assert weighted.merges == positional

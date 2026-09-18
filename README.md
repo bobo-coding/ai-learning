@@ -21,7 +21,7 @@ uv venv --python 3.12 .venv            # or: python3.12 -m venv .venv
 VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 source .venv/bin/activate
 
-python -m pytest -q                     # 324 tests, ~15 seconds
+python -m pytest -q                     # 332 tests, ~15 seconds
 ```
 
 `MINIGPT_DEVICE=cpu` forces CPU everywhere, which is useful when you want exact
@@ -76,7 +76,7 @@ tritonsim/        a Triton interpreter on PyTorch — better error messages than
                   (kernels + tritonsim: 1,960 lines)
 lessons/          the curriculum (~3,000 lines of prose, with the numbers)
 scripts/          data prep and the end-to-end experiments
-tests/            the correctness contract: 324 tests, 2,574 lines
+tests/            the correctness contract: 332 tests, 2,702 lines
 results/          the logs behind every number quoted in the lessons
 ```
 
