@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.so
+*.o
+*.bin
+*.pt
+*.npy
+data/*
+!data/.gitkeep
+out/*
+!out/.gitkeep
+# results/ is committed on purpose -- it is the evidence for the lessons' numbers
+.pytest_cache/
+build/
+*.egg-info/
+.DS_Store
