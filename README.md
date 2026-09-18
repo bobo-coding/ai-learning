@@ -76,7 +76,7 @@ tritonsim/        a Triton interpreter on PyTorch — better error messages than
                   (kernels + tritonsim: 1,960 lines)
 lessons/          the curriculum (~3,000 lines of prose, with the numbers)
 scripts/          data prep and the end-to-end experiments
-tests/            the correctness contract: 336 tests, 2,812 lines
+tests/            the correctness contract: 336 tests, 2,751 lines
 results/          the logs behind every number quoted in the lessons
 ```
 
